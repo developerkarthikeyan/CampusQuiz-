@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTS Aptitude Questions Practice App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Calm Harmony (Warm Neutrals) -->
+    <!-- Application Structure Plan: The SPA is designed as an interactive quiz platform. A sidebar allows users to select a specific aptitude topic (e.g., Ages, Geometry) or view all questions. The main area displays the questions for the selected topic in a scrollable list of cards. Users can click an option to get immediate feedback (correct/incorrect highlighting) and see their score update. This structure was chosen to transform the static document into an active learning tool, allowing for focused practice and self-assessment, which is more effective for exam preparation than passively reading a list. -->
+    <!-- Visualization & Content Choices: Report Info: Aptitude questions and answers. Goal: Interactive practice. Presentation: Questions are displayed in individual cards with clickable buttons for options. Interaction: Clicking a topic button filters the questions. Clicking an answer button checks for correctness and provides visual feedback (color change). A new "Explain Answer" button appears after answering, which calls the Gemini API to generate and display a step-by-step solution. A "Generate Similar Question" button also appears, calling Gemini to create a new, on-the-fly practice problem based on the original. Justification: This card-based quiz format with immediate feedback and AI-powered explanations/question generation is highly intuitive and engaging for a practice test application. Library/Method: Vanilla JS for logic, Tailwind CSS for styling, Gemini API for explanations and question generation. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+        }
+        .option-btn:disabled {
+            cursor: not-allowed;
+        }
+        .correct {
+            background-color: #22c55e !important;
+            color: white !important;
+            border-color: #16a34a !important;
+        }
+        .incorrect {
+            background-color: #ef4444 !important;
+            color: white !important;
+            border-color: #dc2626 !important;
+        }
+        .explanation-container {
+            display: none;
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f8fafc;
+            border-left: 4px solid #64748b;
+            color: #334155;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 24px;
+            height: 24px;
+            animation: spin 2s linear infinite;
+            margin-top: 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div id="app" class="flex h-screen overflow-hidden">
+        
+        <button id="menu-toggle" class="md:hidden fixed top-4 left-4 z-30 bg-slate-800 text-white p-2 rounded-md">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+            </svg>
+        </button>
+
+        <aside id="sidebar" class="sidebar fixed md:relative z-20 w-64 bg-white h-full flex-shrink-0 shadow-lg p-5 overflow-y-auto">
+            <div class="flex flex-col h-full">
+                <h1 class="text-2xl font-bold text-slate-900 mb-6">Aptitude Topics</h1>
+                <nav id="topic-nav" class="flex-grow">
+                </nav>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white shadow-md p-4 z-10">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-slate-900" id="current-topic-title">Welcome!</h2>
+                    <div id="score-tracker" class="text-lg font-semibold bg-slate-800 text-white px-4 py-2 rounded-lg">
+                        Score: 0 / 0
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex-1 overflow-y-auto p-4 md:p-8">
+                 <div id="intro-section" class="bg-white p-6 rounded-lg shadow-md mb-8">
+                    <h3 class="text-xl font-bold mb-2 text-slate-900">Welcome to Your Interactive Aptitude Practice!</h3>
+                    <p class="text-slate-600">This tool is designed to help you sharpen your skills by practicing aptitude questions from various topics. To get started, select a topic from the sidebar on the left. The questions for that topic will appear here. For each question, choose the answer you think is correct. You'll get immediate feedback on your choice. Your score will be tracked at the top right. Good luck!</p>
+                </div>
+                <div id="questions-container" class="space-y-6">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const questions = [
+            { topic: "Ages", question: "Five Years ago, Parn's age was three times of Sarath's age. Five years hence, Parn's age will be twice Sarah's age. After how many years from now will their combined age be 80 years?", options: ["14", "12", "13", "15"], answer: 0 },
+            { topic: "Simple and Compound Interest", question: "Lily invested $525 under a simple interest of 12% per annum. Find the amount received by her after two years.", options: ["$625", "$527", "$651", "$650"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "Two number are in the ratio 13:11. If the difference of the numbers is 8, then find the smaller of the two numbers.", options: ["42", "44", "52", "66"], answer: 1 },
+            { topic: "Data Interpretation", question: "The number of students who like Hockey in class 8 is what percentage of the number of students who like Table tennis in class 12?", options: ["0.3267", "0.4444", "0.8888", "0.7225"], answer: 1 },
+            { topic: "Miscellaneous", question: "In a certain month, the total income of Adam, Bruce and Charles is $24,000. In that month, Adam spends 75% of his income, Bruce spends 60% of his income, and Charles spends 72% of his income. Sum of expenditures of all three in that month is $16,800. If the ratio of the amount saved by Adam, Bruce and Charles is 5:6:7, then find the savings of Bruce in the month.", options: ["$2000", "$2800", "$2500", "$2400"], answer: 3 },
+            { topic: "Miscellaneous", question: "Which of the following is the second smallest prime factor of (2^10 - 4)?", options: ["5", "3", "1", "2"], answer: 1 },
+            { topic: "Percentages", question: "Hermoine fills a water tank to 75% of its capacity. If she draws 10 liters of water out of the tank, then the water level in the tank becomes 62.5% of its capacity. Find the capacity of the tank.", options: ["75 liters", "84 liters", "72 liters", "80 liters"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "There are 7 points on a plane, out of which 3 points lie on a straight line, and no other three points lie on a straight line. Find the number of triangles that can be formed using these points.", options: ["34", "36", "28", "32"], answer: 0 },
+            { topic: "Miscellaneous", question: "Jennifer went on a trip to three cities. In each city she spent $25 more than half the amount she had with her when she arrived in the city. At the end of the tour she had $40. Find the amount that she started with.", options: ["676", "670", "526", "496"], answer: 1 },
+            { topic: "Geometry", question: "In the given figure, what is the ratio of the perimeter of the two circles that circumscribe and inscribe a square of side 16cm?", options: ["√2:1", "1:2", "1:√2", "2:1"], answer: 0 },
+            { topic: "Percentages", question: "There are three natural numbers. The first and second are more than the third by 32% and 36% respectively. What Percentage of the First number is the Second number?", options: ["103.03%", "101.56%", "103.12%", "106.25%"], answer: 2 },
+            { topic: "Geometry", question: "Product of sides of a triangle is 576 cm³. If area of the triangle is 32 cm², then, find the circumradius.", options: ["9 cm", "18 cm", "4.5 cm", "13.5 cm"], answer: 2 },
+            { topic: "Profit and Loss", question: "Bonny gained 20% by selling a novel at $120. Find the price at which she purchased the novel.", options: ["$155", "$140", "$120", "$100"], answer: 3 },
+            { topic: "Profit and Loss", question: "A shopkeeper sold 4 laptops for $800 each. The first laptop was sold at a 25% profit, the second at a 10% loss, the third at a 5% profit, and fourth at a 20% loss. Find the shopkeeper's net profit or loss.", options: ["$60.48 profit", "$90.79 loss", "$60.48 loss", "$91.32 profit"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "If Ray can run a certain distance in 8 hours at 65 kmph, and Dev can cover the same distance in 4 hours at 70 kmph, find the ratio of their distances (assuming they cover the same distance).", options: ["12:7", "13:7", "11:7", "1:1"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "Patric invests a certain sum of money in a business in a chocolate factory. Qaza contributes thrice of Patrick's amount, and Richard contributes 5/3rd of Qaza's total. If the yearly profit is USD 711000, What is Qaza's share?", options: ["USD 395000", "USD 700000", "USD 237000", "USD 79000"], answer: 2 },
+            { topic: "Data Interpretation", question: "From the school table, what is the total number of students who appeared from schools M, O and P together?", options: ["21000", "18000", "17000", "12000"], answer: 2 },
+            { topic: "Geometry", question: "From an external point, a tangent is drawn to a circle with a radius of 8cm. If the distance from the external point to the centre of the circle is 15cm, find the length of the tangent.", options: ["12.6cm", "18cm", "22.6cm", "8.2 cm"], answer: 0 },
+            { topic: "Data Interpretation", question: "From the adults pie chart, what is the difference between the number of male and female lawyers? Total adults: 98000, Male:Female ratio 25:24.", options: ["2400", "2530", "2600", "2480"], answer: 3 },
+            { topic: "Data Interpretation", question: "From the adults pie chart, what is the number of males who are unemployed as a percentage of the total unemployed persons in the city?", options: ["0.505", "0.385", "0.565", "0.4"], answer: 1 },
+            { topic: "Ratio and Proportion", question: "The total quantity of potatoes of three types in a basket is 120 kg. If the ratio of the quantity of the first type to the second type is 3:4, and the ratio of the second type to the third type is 7:9, what is the quantity of the second type of potatoes?", options: ["39 Kg", "54 Kg", "60 Kg", "30 Kg"], answer: 0 },
+            { topic: "Profit and Loss", question: "What is the selling price of the tools, if the company buys a set of tools for $300 and makes a 50% profit on selling price?", options: ["$550", "$450", "$400", "$600"], answer: 3 },
+            { topic: "Geometry", question: "In the given figure, AB || CD and AD=BC. AE=7cm and ratio of area of triangle ADE AND AEC is 1:3. Which among the given option can be the area of trapezium ABCD, if sides are in integer?", options: ["92 cm²", "70 cm²", "135 cm²", "168 cm²"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "Drake covered 40% of a certain distance at 20 km/hr, 50% of the remaining distance at 10 km/hr. If his total travelled time is 8 hours, then find the total distance covered by him.", options: ["443/3 km", "400/3 km", "322/3 km", "500/3 km"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Morrie and Maryline start simultaneously from Block P and Block Q and walk towards Block Q and P respectively. Block P and Block Q are 1200 m apart. They meet for the second time at point S, 500 m from Block Q. Find the ratio of the speed of Morrie and Maryline.", options: ["17:19", "19:17", "29:31", "31:29"], answer: 1 },
+            { topic: "Percentages", question: "If the expenditure on rent of mark is 30% more than that of clint, then what percentage of the monthly expenditure of mark was spent on rent?", options: ["0.34125", "0.0653", "0.3627", "0.136"], answer: 0 },
+            { topic: "Percentages", question: "A shopkeeper marked an item at a certain percentage cost above cost price. If he sells the item after giving 25% discount, he makes a profit of 41%. What would be the profit percentage made by him on selling the item after giving a discount of 35%?", options: ["23.4%", "22.2%", "20%", "21.8%"], answer: 1 },
+            { topic: "Percentages", question: "In recent parliament election, there are only two candidates P and Q. P got 58% of the votes and won by 384 votes. What is the total number of votes in the parliament elections (including invalid votes) given that there are invalid votes?", options: ["2450", "2100", "2400", "2540"], answer: 2 },
+            { topic: "Permutations and Combinations", question: "How many 6 digit numbers can be formed using 5, 7, 9, 0, 1, 8 when repetition of digits is allowed?", options: ["600", "720", "19440", "38880"], answer: 2 },
+            { topic: "Simple and Compound Interest", question: "Jane invested $6000 in a savings bank account that earns 10% interest compounded annually. What's the total amount at the end of 2 years?", options: ["$7260", "$7200", "$6600", "$6900"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "Patrick invests a certain sum of money in a business. Qaza contributes thrice of Patrick's amount, and Richard contributes 5/3rd of Qaza's total. If the yearly profit is USD 711000, what is Qaza's share?", options: ["USD 395000", "USD 700000", "USD 237000", "USD 79000"], answer: 2 },
+            { topic: "Time and Work", question: "A does 70% of a work in 40 days. He then calls in B and they together finish the remaining work in 6 days. How long would B alone take to do the whole work?", options: ["25.46 days", "50.62 days", "15.28 days", "30.77 days"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "Car M started driving East from point P at 8.00 am. Car N started driving East from point P at 11.00 am. The ratio of the speeds of M and N is 4:5. Find their meeting time.", options: ["2:24 p.m", "12:12 p.m", "11:00 p.m", "12:24 p.m"], answer: 0 },
+            { topic: "Profit and Loss", question: "If the gain incurred by selling a laptop is 1/5th of its cost price, then find the gain percent.", options: ["20%", "23.25%", "25.67%", "33.33%"], answer: 0 },
+            { topic: "Miscellaneous", question: "Meredith Palmer has $320 in the denomination of $1 notes, $5 notes and $10 notes. The number of notes of each denomination is equal. What is the total number of notes that she has?", options: ["45", "60", "75", "50"], answer: 1 },
+            { topic: "Ratio and Proportion", question: "Two numbers are respectively 20% and 50% more than a third number. The ratio of the two numbers is:", options: ["3:5", "2:5", "4:5", "5:4"], answer: 2 },
+            { topic: "Percentages", question: "Juhi secured 49.5% of the total votes polled in an election. She lost to her contestant by 20000 votes. All the votes polled were valid. Find the number of votes polled if there were only two contestants.", options: ["1000000", "200000", "2000000", "20000000"], answer: 2 },
+            { topic: "Ages", question: "Five years ago, Pam's age was three times Sarah's age. Five years hence, Pam's age will be twice Sarah's age. After how many years from now will their combined age be 76 years?", options: ["13", "14", "15", "12"], answer: 0 },
+            { topic: "Profit and Loss", question: "Mike bought a smartphone, which had MRP of $2400, for a discount of 5% and sold it to Jim for a profit of 10%. Jim used it for 2 months and sold the same to his friend at a loss of 33.33%. At what price did Jim sell it?", options: ["$1680", "$1800", "$2233", "$1698"], answer: 0 },
+            { topic: "Time and Work", question: "Lione can complete a task in 12 days, John can complete it in 18 days. Chris can complete the same task in x days. Chris started the task. After 3 days, Lione and John joined. If the task is completed in 4 more days, then find the value of x.", options: ["17.28", "15.75", "16.5", "14.25"], answer: 0 },
+            { topic: "Permutations and Combinations", question: "If words are formed from rearranging the letters of word 'CONTRACT', then which word is the 6301th?", options: ["RANCCTOT", "RACNTTOC", "RACCNOTT", "RACNOTCT"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Morrie and Maryline start simultaneously from Block P and Block Q (1200m apart). They meet for the second time at point S, 500 m from Block Q. Find the ratio of the speed of Morrie and Maryline.", options: ["19:17", "29:31", "17:19", "31:29"], answer: 0 },
+            { topic: "Time and Work", question: "18 men can complete a piece of work in 20 days and women can complete a piece of work in 32 days. 18 men started the work and after 15 days, they were replaced by x women. If x women can complete the work in 16 days, what is the value of x?", options: ["8", "12", "15", "10"], answer: 3 },
+            { topic: "Miscellaneous", question: "In an examination, Mark scores 4 marks for every correct answer and loses 1/4th of mark for every wrong answer. If he attempts 80% of 50 questions and secures 135 marks, the number of questions he attempted correctly is:", options: ["40", "32", "35", "38"], answer: 2 },
+            { topic: "Time and Work", question: "Three workers X,Y,Z, paint a house. X takes 15 days alone, Y takes 20 days alone, and Z takes 30 days alone. X starts painting and works for 5 days. Then, Y and Z join X to finish the job. How many days will it take to complete the remaining work?", options: ["4", "4.44", "5", "5.55"], answer: 1 },
+            { topic: "Profit and Loss", question: "Burak owns a shop of video players. He purchased a video player for $1200, and marked the price so that by offering a discount of 20%, he would earn a profit of 10%. Find the marked price of the Video player.", options: ["$1575", "$1550", "$1650", "$1425"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "A delivery truck covers a distance of 270 km at 60 kmph and the next 120 km at 75 kmph. What is the average speed of the truck (in kmph)?", options: ["70.2 kmph", "67.5 kmph", "64.5 kmph", "60.6 kmph"], answer: 1 },
+            { topic: "Time and Work", question: "At their usual efficiency levels, Siri and Bianca together finish a task in 16 days. If Siri had worked half as efficiently and Bianca twice as efficiently, the task would have been completed in 12 days. How many days would Siri take to finish the task alone at twice her usual efficiency?", options: ["12 days", "7.2 days", "18 days", "9.6 days"], answer: 3 },
+            { topic: "Profit and Loss", question: "Garcia sold his bike at 14% profit. Had he charged $120 more, his profit would have been 17%. What is the cost price of the bike?", options: ["$4000", "$3600", "$4500", "$5000"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "Jacques, a con-man, was running along a road at 10 km/hr. He crossed a policeman moving at a speed of 15 km/hr in the opposite direction. The policeman had to continue for 7 minutes before he could start chasing him. Find the total time taken (in minutes) by the policeman to catch the con-man from the time he crossed him.", options: ["42", "55", "35", "30"], answer: 0 },
+            { topic: "Simple and Compound Interest", question: "If you invest $200 at a simple interest rate of 5% per year, how much interest will you earn after 3 years?", options: ["$40", "$50", "$60", "$30"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "A committee of 4 people needs to be formed from a group of 8 students. However, two specific students, X and Y must be included in the committee. In how many different ways can the committee be formed?", options: ["12", "18", "10", "15"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "There are 18 points on a plane surface such that no three points are in a line. How many distinct triangles can be formed by joining these points?", options: ["1224", "816", "2448", "408"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Billiard, a con-man, was running along a road at 12 km/hr. He crossed a cop moving at a speed of 15 km/hr in the opposite direction. The cop had to continue for 7 minutes before he could start chasing him. Find the total time taken (in minutes) by the cop to catch Billiard from the time he crossed him.", options: ["70", "54", "45", "63"], answer: 3 },
+            { topic: "Profit and Loss", question: "Two articles are bought at the same price. One is sold at 15% profit and other at 13% profit. Find the overall profit percentage.", options: ["28%", "30%", "14%", "16%"], answer: 2 },
+            { topic: "Averages", question: "The average weight of a class of 40 students is 35 kg. If one student leaves the class, the average weight of the class drops by 200 gm. What is the weight of the student who left?", options: ["42.8 kg", "44.6 kg", "37.4 kg", "42.8 kg"], answer: 0 },
+            { topic: "Profit and Loss", question: "Stokes sold his bat at a loss of 10%. If he had sold it for Rs. 100 more, he would have made a profit of 18%. What is the approx. cost of the bat?", options: ["Rs. 357.10", "Rs. 365.30", "Rs. 380.50", "Rs. 410"], answer: 0 },
+            { topic: "Time and Work", question: "Jacob and Carl can complete a piece of work in 18 and 24 days respectively. They worked together for 4 days after which Jacob was replaced by Dixon. If the work gets completed in another 8 days, then calculate the number of days in which Dixon alone could complete twice the original work.", options: ["57.6 days", "50 days", "52.5 days", "48 days"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "A delivery truck covers a distance of 270 km. The first 120 km is covered at 60 kmph and the rest is covered at 75 kmph. What is the average speed of the truck (in kmph)?", options: ["64.5 kmph", "67.5 kmph", "60.6 kmph", "70.2 kmph"], answer: 1 },
+            { topic: "Ratio and Proportion", question: "At a certain mall, the ratio of the number of security guards to the number of salespersons is 3:13. When 12 more salespersons are hired, the ratio changes to 3:16. What will be the difference between the number of salespersons and security guards?", options: ["52", "3", "40", "9"], answer: 0 },
+            { topic: "Geometry", question: "In an equilateral triangle XYZ, J, K, and L are the midpoints of XY, XZ, and YZ respectively. The area of triangle JKL is 12.13 cm². What is the area of equilateral triangle XYZ?", options: ["3.03 cm²", "48 cm²", "24.26 cm²", "48.52 cm²"], answer: 3 },
+            { topic: "Profit and Loss", question: "By selling a silver dinner set for Rs. 74500, the jeweler incurs a loss of 20%. What is the profit or loss percentage if he sells the silver dinner set at Rs. 98000?", options: ["5.23% Profit", "4.8% Loss", "5.75% Profit", "5.23% Loss"], answer: 0 },
+            { topic: "Permutations and Combinations", question: "What is the rank of the word 'GARDEN' when the letters of the word are arranged in dictionary order?", options: ["387", "401", "360", "379"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "Two types of magnets, A and B, are stored in a ratio of 4:7 in a science lab. If the total number of magnets is 66, how many of each type are there?", options: ["20, 40", "33, 66", "24, 42", "32, 42"], answer: 2 },
+            { topic: "Probability", question: "A fair coin is tossed nine times. What is the probability of getting heads at least once?", options: ["9/512", "511/512", "503/512", "1/512"], answer: 1 },
+            { topic: "Permutations and Combinations", question: "In how many ways a team of 11 Basketball players be selected out of 6 defenders and 8 attackers such that the team has at least 5 attackers?", options: ["360", "324", "30", "364"], answer: 3 },
+            { topic: "Ages", question: "Smith got married 18 years ago. Now, his age is 150% of his age when he got married. If his son's present age is 1/9th of his present age, find his son's present age.", options: ["6 years", "4 years", "5 years", "8 years"], answer: 1 },
+            { topic: "Miscellaneous", question: "Determine whether the ordered triple (1, -3, 2) is a solution to the system: 1. 2x+y+3z=7, 2. x+2y+5z=14, 3. 3x+y-2z=10", options: ["yes, for eq 1 only", "yes, for eq 3 only", "No, not a solution", "yes, for all equations"], answer: 0 },
+            { topic: "Miscellaneous", question: "If f(m) = km² - 4m + 3k is divisible by m-3, then find the value of k.", options: ["-1", "1", "0", "-2"], answer: 1 },
+            { topic: "Geometry", question: "In a triangle ABC, AP, BQ and CR are medians intersecting at O. If area of triangle AOQ is 17cm², then find the area of triangle ABC.", options: ["51 cm²", "153 cm²", "136 cm²", "102 cm²"], answer: 3 },
+            { topic: "Percentages", question: "The sides of a regular hexagon are decreased by 19%. What is the percentage decrease in the surface area of the regular hexagon?", options: ["41.44%", "36%", "42.59%", "34.39%"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "In how many ways can a team of 16 members be selected from a group of 10 boys and 11 girls such that an equal number of boys and girls are selected?", options: ["6875", "8235", "6565", "7425"], answer: 3 },
+            { topic: "Time and Work", question: "A,B,C together take 60h; A,B,D take 72h; A,C,D take 84h; B,C,D take 48h. Who is the fastest worker?", options: ["Allen", "David", "Carl", "Ben"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "Jane invested $36,000 in a savings bank account that earns 10% interest compounded annually. What's the total amount at the end of 2 years?", options: ["$28490", "$34069", "$43560", "$42650"], answer: 2 },
+            { topic: "Geometry", question: "A 2m wide road is constructed inside a rectangular park of 32m length and 17m width. Find the area of the road.", options: ["120 m²", "200 m²", "180 m²", "100 m²"], answer: 3 },
+            { topic: "Data Interpretation", question: "From the adults pie chart, what is the number of males who are unemployed as a percentage of total unemployed persons in the city? Total adults: 98000, Male:Female ratio 25:24.", options: ["0.505", "0.385", "0.565", "0.4"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Two women Serena and Venus started walking from point A in the same direction. Serena: 3 steps/sec, 90cm/step. Venus: 4 steps/sec, 70cm/step. What is the distance between them in 9 minutes?", options: ["52m", "54m", "58m", "60m"], answer: 1 },
+            { topic: "Permutations and Combinations", question: "11 players are chosen from a group of 15 players to play cricket. If 5 particular players are always selected, how many distinct teams can be formed?", options: ["231", "455", "252", "210"], answer: 3 },
+            { topic: "Probability", question: "The probability that George will not pass the SAT exam is 3/8 and the probability that James will not pass is 7/15. What is the probability that both will pass?", options: ["2/5", "1/3", "5/8", "8/15"], answer: 0 },
+            { topic: "Geometry", question: "In an equilateral triangle XYZ, J, K and L are the midpoints of XY, XZ, and YZ respectively. The area of triangle JKL is 12.13 cm². What is the area of equilateral triangle XYZ?", options: ["24.26 cm²", "48 cm²", "48.52 cm²", "3.03 cm²"], answer: 2 },
+            { topic: "Permutations and Combinations", question: "A woman has 5 different tops, 8 different jeans, 4 different pairs of stilettos and 7 different handbags. In how many ways can she select one of each?", options: ["24", "5!*8!*4!*7!", "24!", "1120"], answer: 3 },
+            { topic: "Profit and Loss", question: "Timmy loses 20% by selling a novel for $124. Find the price at which she purchased the novel.", options: ["$155", "$100", "$120", "$140"], answer: 0 },
+            { topic: "Ages", question: "Smith got married 18 years ago. Now, his age is 150% of his age when he got married. If his son's present age is 1/9th of his present age, find his son's present age.", options: ["5 years", "6 years", "4 years", "8 years"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "A person reaches his office on time by driving at 24 km/hr. If he drives at 30 km/hr then he reaches office 15 minutes early. What is the usual time taken by the person to reach his office?", options: ["45 minutes", "75 minutes", "60 minutes", "90 minutes"], answer: 1 },
+            { topic: "Miscellaneous", question: "Amanda travelled 2000 km by air which was 5/11th of the entire journey. She travelled 3/11 of the entire distance by car. What is the distance she travelled by train?", options: ["1500 km", "1200 km", "1800 km", "1600 km"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "A cyclist (14 km/h) and a runner (10 km/h) start from the same point. After 2 hours, the distance between them is 8 km. If the runner increases their speed by 2 km/h, how long will it take for the cyclist to be 24 km ahead of the runner?", options: ["8 hours", "6 hours", "9 hours", "12 hours"], answer: 3 },
+            { topic: "Simple and Compound Interest", question: "Jacob invests $120,000 in a savings bank account at the rate of x% compounded quarterly in January 2020. If the total amount received by Jacob in March 2021 is $139,112, then find x.", options: ["16%", "8%", "20%", "12%"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "If a person walks at 20 km/hr instead of 14 km/hr, he would have walked 30 km more. What is the actual distance travelled by him?", options: ["70 km", "80 km", "60 km", "65 km"], answer: 0 },
+            { topic: "Geometry", question: "A 3m wide road is constructed inside a rectangular park. If the total cost for construction of the road is $3600 at a price of $25/m², then find the perimeter of park MNOP.", options: ["90 m", "72 m", "60 m", "30 m"], answer: 1 },
+            { topic: "Permutations and Combinations", question: "In how many ways can 11 balls be selected from 12 blue, 8 red and 10 green balls if same colour balls are identical? Given that at least two balls are selected from all colours.", options: ["30", "27", "24", "21"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "How many 4-digit distinct numbers can be formed using digits from 0, 3, 4, 5, 6, 7, 8 and 9 which are divisible by 5?", options: ["896", "672", "840", "180"], answer: 3 },
+            { topic: "Profit and Loss", question: "Anand bought two mobiles at the same price. He sold one of them at 20% profit and the other at 10% loss. Find the overall profit percentage made by Anand.", options: ["7.5%", "15%", "5%", "10%"], answer: 2 },
+            { topic: "Miscellaneous", question: "Amanda travelled 3000 km by air which was 5/7th of the entire journey. She travelled 1/5th of the entire distance by car. What is the distance she travelled by train?", options: ["100 km", "200 km", "250 km", "360 km"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "A man drives a car for 3 minutes and covers a distance of 3.05 km. If for each minute, the distance covered is 25% more than the distance covered in the previous minute, then find the distance covered in the first minute.", options: ["800 m", "720 m", "900 m", "750 m"], answer: 0 },
+            { topic: "Profit and Loss", question: "Garcia sold his bike at 14% profit. Had he charged $120 more, his profit would have been 17%. What is the cost price of the bike?", options: ["$4000", "$3600", "$4500", "$5000"], answer: 0 },
+            { topic: "Miscellaneous", question: "The passing mark for an exam is 50. Each student receives bonus marks based on their original marks (50-70: 10% bonus, 71-85: 5% bonus, Above 85: 3 marks). If the class had to maintain an average of 80 marks to win a prize, how many more marks should each student contribute equally?", options: ["Data insufficient", "2 marks", "3 marks", "5 marks"], answer: 0 },
+            { topic: "Permutations and Combinations", question: "How many 6 digit numbers can be formed using 5,7,9,0,1,8 when repetition of digits is allowed?", options: ["600", "720", "19440", "38880"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "In a factory, the ratio of Millets, Sugar and Wheat is 8:5:3 respectively. If the total number of goons in the factory is 4096. Then what is the number of goons of Millets in the factory?", options: ["2048", "1280", "2816", "768"], answer: 0 },
+            { topic: "Percentages", question: "The sides of a regular hexagon are decreased by 19%. What is the percentage decrease in the surface area of the regular hexagon?", options: ["41.44%", "36%", "42.59%", "34.39%"], answer: 3 },
+            { topic: "Miscellaneous", question: "'m' mangoes are distributed among some boys and girls. If each boy gets 9, then each girl gets 6. If each boy gets 10 and each girl gets 7, there is a surplus of 18. If the number of girls is 9, then find m.", options: ["136", "135", "140", "125"], answer: 1 },
+            { topic: "Miscellaneous", question: "In a certain month, the total income of Adam, Bruce and Charles is $24,000. Adam spends 75%, Bruce 60%, and Charles 72%. Sum of expenditures is $16,800. If the ratio of savings is 5:6:7, find Bruce's savings.", options: ["$2000", "$2800", "$2500", "$2400"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "Six students (A, B, C, D, E, F) need to line up. A and B refuse to stand next to each other, while C and D insist on standing together. In how many unique ways can they be arranged?", options: ["120", "180", "144", "160"], answer: 2 },
+            { topic: "Ages", question: "Isabela gave birth to twins when she was 23 years old. After m years, the sum of the ages of Isabella and her twin children was 56 years. What is the value of m?", options: ["10", "9", "12", "11"], answer: 3 },
+            { topic: "Simple and Compound Interest", question: "If $400 is invested at a simple interest rate of 4% per annum for 4 years, what will be the total interest earned?", options: ["64", "58", "22", "44"], answer: 0 },
+            { topic: "Probability", question: "The probability that Mardenborough will come first is 1/5 and the probability that Captain will not come first is 3/4. What is the probability that only one of them will come first?", options: ["2/5", "7/20", "1/5", "3/20"], answer: 1 },
+            { topic: "Percentages", question: "A Company had total revenue of $200,000 last year. This year, revenue increased by 15% but COGS (initially 40% of last year's revenue) increased by 25%. Calculate the net profit percentage for this year.", options: ["12.5%", "15.66%", "56.52%", "56.52%"], answer: 2 },
+            { topic: "Permutations and Combinations", question: "How many different 10-letter words can be formed from 'FEDERALISM' such that vowels and consonants change their position among themselves only?", options: ["24*6!", "2*7!", "21*6!", "12*6!"], answer: 0 },
+            { topic: "Miscellaneous", question: "In an election among Bill, Cullen and Mark, Bill gets half the votes of Cullen. Mark beats Cullen by 300,000 votes. Mark beats Bill by 10% of the total votes. Find the total number of votes polled.", options: ["350000", "600000", "400000", "320000"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "In m minutes from now, the time will be noon. 24 minutes ago, the time was 7m minutes past 10 a.m. Find the present time.", options: ["11:50 a.m.", "11:48 a.m.", "11:49 a.m.", "11:47 a.m."], answer: 1 },
+            { topic: "Time and Work", question: "Lin can complete a task in x days, Josh in 18 days, Chris in 24 days. Lin started. After 3 days, Josh and Chris joined. If the task is completed in 4 more days, find x.", options: ["212/35 days", "120/7 days", "126/11 days", "105/8 days"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "A train travelling at 36 km/hr crosses a woman on the platform in 15 seconds and crosses the platform in 36 seconds. If X m is the length of the train and Y m is the length of the platform, what is (X, Y)?", options: ["(120, 150)", "(150, 210)", "(120, 180)", "(150, 190)"], answer: 1 },
+            { topic: "Percentages", question: "In an IIT class, 70% of students are boys and 15% of students are in the dramatic club. If 13% of the boys are in the club, what percentage of the club members are girls?", options: ["45.5%", "41.2%", "38.5%", "39.33%"], answer: 3 },
+            { topic: "Miscellaneous", question: "In an examination, Ted scores 4 marks for a correct answer and loses 1/4 mark for a wrong answer. He attempts 75% of 60 questions and secures 165 marks. How many questions did he attempt correctly?", options: ["45", "42", "38", "40"], answer: 3 },
+            { topic: "Miscellaneous", question: "Amanda travelled 2000 km by air (5/11 of journey). She travelled 3/11 of the journey by car. What distance did she travel by train?", options: ["1000 km", "1200 km", "1250 km", "1500 km"], answer: 1 },
+            { topic: "Profit and Loss", question: "18.5% more is gained by selling a mattress for Rs. 25700 than by selling it at Rs. 20350. What is the cost price of the mattress?", options: ["Rs. 28918", "Rs. 28000", "Rs. 31720", "Rs. 29564"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "A and B are two numbers such that the ratio of twice A and thrice B is 8:7. If the sum of A and B is 608, find the value of A.", options: ["384", "368", "384", "442"], answer: 0 },
+            { topic: "Percentages", question: "A trust is selling tickets for a charity show at Rs. 150 each. A man sold 85% of his tickets and had 9 tickets remaining. How much money did he collect?", options: ["Rs. 7500", "Rs. 7650", "Rs. 9000", "Rs. 6000"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "The difference between Simple Interest received from two banks on Rs. 1250 for four years is Rs. 125. What is the difference between their annual rates?", options: ["3.5%", "4%", "2.5%", "3%"], answer: 2 },
+            { topic: "Time and Work", question: "Machine X produces 500 units in 10 hours, Machine Y produces 300 units in 8 hours. If they work together for 4 hours, how many additional hours will Y alone need to produce 500 units?", options: ["4 hours", "6 hours", "8 hours", "5 hours"], answer: 0 },
+            { topic: "Miscellaneous", question: "What is the minimum value of the expression 11a² + 13a + 6?", options: ["11/26", "191/44", "9/22", "13/22"], answer: 1 },
+            { topic: "Time and Work", question: "Smith and Shane can complete a project in 25 and 40 days respectively. If they work on alternate days beginning with Smith, in how many days will the work be completed?", options: ["31 days", "32 days", "15 days", "16 days"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "You have a box with a total of 48 blue and red rubber bands. If the ratio of red to blue is 3:5, how many red and blue rubber bands are in the box?", options: ["24, 42", "33, 66", "20, 40", "18, 30"], answer: 3 },
+            { topic: "Time and Work", question: "A can do a piece of work in 6 hours; B and C together in 5 hours, while A and C together in 4 hours. How long would B alone take to do it?", options: ["8 4/7 Hours", "6 2/7 Hours", "9 1/2 Hours", "7 1/7 Hours"], answer: 0 },
+            { topic: "Profit and Loss", question: "A designer chair sells for $120. The cost to produce it is $z. The store made a profit of z% of the production cost. Calculate z.", options: ["22.44%", "70.42%", "32.63%", "60.55%"], answer: 3 },
+            { topic: "Profit and Loss", question: "After two successive discounts of 30% and 15%, Chandler purchases a video game for Rs. 21420. What was the marked price?", options: ["33200", "30600", "35000", "36000"], answer: 3 },
+            { topic: "Profit and Loss", question: "A manufacturer sold jeans to a company for Rs. 600. The company sold them to a dealer for Rs. 750. The dealer sold them to a shopkeeper for Rs. 800. The shopkeeper marked them up by 30% and gave a 10% discount. What is the shopkeeper's profit percentage?", options: ["15%", "20%", "17%", "18%"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "Rocky travelled a certain distance in 12 hours. He travelled part on foot at 8 km/hr and the rest by bicycle at 16 km/hr. The distance by bicycle was 48 km more than on foot. How long did he travel on foot?", options: ["4 hours", "6 hours", "4.5 hours", "5 hours"], answer: 1 },
+            { topic: "Miscellaneous", question: "Mrs. Halpert has $240 in one-dollar, five-dollar, and ten-dollar notes. The number of notes of each denomination is equal. What is the total number of notes she has?", options: ["45", "32", "35", "45"], answer: 0 },
+            { topic: "Percentages", question: "A musician owns a flute with 16 holes. They add 25% more holes. Then, they decide to have a flute with 10% fewer holes than the new total. What is the final number of holes?", options: ["21", "18", "20", "19"], answer: 1 },
+            { topic: "Ratio and Proportion", question: "Aruna started a business with Rs. 35000. After 2 months, Kiran joined with Rs. 40000. After 6 more months, Vikram joined with Rs. 28000. At year end, profit is Rs. 13980. What is Vikram's share?", options: ["Rs. 1420", "Rs. 1540", "Rs. 1580", "Rs. 1680"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "Andy, Bruce, and Charles share tour expenses. Andy's share is 4/5 of Bruce's. Charles's share is 40% more than Bruce's. Andy pays $800, Bruce $600, Charles $1000. How much does Bruce need to pay Andy in the final settlement?", options: ["$100", "$50", "$75", "$150"], answer: 0 },
+            { topic: "Profit and Loss", question: "Mike bought a smartphone (MRP $2290) at a 5% discount and sold it to Jim for a 16.6% profit. Jim used it and sold it at a 12.5% loss. At what price did Jim sell it?", options: ["$1803", "$1655", "$2220", "$2233"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "Three investors, John, Shane, and David, invest in the ratio 4:5:6. After one year, John's investment grows by 20%, Shane's by 15%, and David's remains the same. If the total profit is $150000, how much does each receive?", options: ["$41000, $52500, $57500", "$40679, $52557, $57589", "$48000, $57500, $60000", "$47204, $54288, $58508"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "The ratio of some numbers is (3/9):(15/21):(18/30). The difference between the highest and lowest number is 80. Find the numbers.", options: ["70, 126, 150", "80, 160, 210", "150, 126, 75", "140, 126, 135"], answer: 0 },
+            { topic: "Ages", question: "Shruthi got married 18 years ago. Now, her age is 175% of her age when she got married. If her daughter's present age is 1/6th of her present age, find her daughter's present age.", options: ["10 years", "8 years", "12 years", "7 years"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "If the ratio of the subtraction and addition of two numbers is 14:15, what is the ratio of those two numbers?", options: ["1:29", "25:2", "27:1", "29:1"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "P, Q and R are partners. P received 1/5th of the profit, Q received 3/8th, and R received the remaining Rs. 5100. How much did Q receive?", options: ["Rs. 4800", "Rs. 3900", "Rs. 4200", "Rs. 4500"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "In a party, a total of 595 handshakes take place. If each person shakes hands with every other person, how many persons are there in the party?", options: ["35", "34", "42", "38"], answer: 0 },
+            { topic: "Percentages", question: "The price of a play station becomes $480 after it decreases by 20%. Find the original price of the item.", options: ["$625", "$550", "$600", "$500"], answer: 2 },
+            { topic: "Profit and Loss", question: "Aaron bought an earphone for $650 and sold it at a 17% profit. He purchased another brand's earphones at the same price and sold them at a 15% loss. What is his overall profit/loss?", options: ["$6.5, Loss", "$13.5, Profit", "$13, Profit", "$13, Loss"], answer: 2 },
+            { topic: "Percentages", question: "A factory produces 1000 units/day. A new process reduced the defect rate from 8% to 5%. If the factory operates for 30 days, calculate the percentage decrease in defective units.", options: ["37.5%", "52.2%", "57.5%", "66.5%"], answer: 0 },
+            { topic: "Miscellaneous", question: "Find the value of x for the given equation: |3x - 8| = 12", options: ["8/3", "20/3", "20/3 and -4/3", "-4/3"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "The scores of Mimi and Lucy in a class test are in the ratio 11:13. If their total score is 480, find Lucy's score.", options: ["195", "165", "260", "220"], answer: 2 },
+            { topic: "Simple and Compound Interest", question: "Maggie lends a total of Rs. 30000 to Jack and Daisy. She lends a certain amount to Jack at 12% interest and the rest to Daisy at 8%. If the interest Jack and Daisy pay after four years is equal, what amount was lent to Jack?", options: ["Rs. 18000", "Rs. 15750", "Rs. 12000", "Rs. 20500"], answer: 2 },
+            { topic: "Time and Work", question: "A man, a woman and a girl can do a work in 24, 48 and 144 days respectively. How many girls must assist 3 men and 4 women to do the work in 3 days?", options: ["18", "8", "22", "6"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "A person in train P observes that train Q (thrice the speed of P) overtakes him in 20 seconds. If they travel in opposite directions, how long would it take for train Q to cross him?", options: ["25 seconds", "30 seconds", "26.67 seconds", "10 seconds"], answer: 3 },
+            { topic: "Probability", question: "An integer n is chosen at random from two-digit positive integers. What is the probability that (n-2)(n+2) is divisible by 8?", options: ["19/30", "23/90", "17/30", "43/90"], answer: 3 },
+            { topic: "Geometry", question: "A woman walks along the boundary of a rectangular society at 9.6 km/hr and completes one round in 11 mins. If the length and breadth are in the ratio 4:5, what is the area of the society (in sq. meters)?", options: ["192080", "176745", "200000", "193600"], answer: 3 },
+            { topic: "Miscellaneous", question: "If √(x+11) = -5, find the real value of x.", options: ["14", "Real value of x not possible", "6", "-14"], answer: 1 },
+            { topic: "Profit and Loss", question: "Adam sold his bike at a loss of $5500. If he sold it for $7500, he would have made a profit of $2000. Find the purchase price.", options: ["$13000", "$16,500", "$17500", "$13,000"], answer: 3 },
+            { topic: "Profit and Loss", question: "A company purchased 100 gadgets at $25 each. They sell each for $35. After selling 70, they reduce the price of the remaining by 20%. What is the total profit or loss?", options: ["$500 profit", "$790 profit", "$800 profit", "$290 profit"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "A sum of Rs. 5300 is divided into two parts. One part is invested at 10% p.a. for 2 years and the other at 20% for the same time. If the interest is compounded annually and both parts amount to the same value, find the smaller part.", options: ["Rs. 2300", "Rs. 2420", "Rs. 2200", "Rs. 2880"], answer: 3 },
+            { topic: "Time and Work", question: "Pavan can do a piece of work in 6 days. Working together, Pavan and Kalyan can do the work in 4 days. If Pavan is x times as efficient as Kalyan, what is the value of x?", options: ["Five", "Three", "Four", "Two"], answer: 3 },
+            { topic: "Probability", question: "Two numbers are selected from 1, 2, 3, 4, 5, 6, 7, 8 and 9 at random. What is the probability that their sum is odd?", options: ["None of the mentioned options", "4/9", "5/9", "2/9"], answer: 2 },
+            { topic: "Time and Work", question: "Bruce takes twice as much time as Jacob and thrice as much time as Sam. If all three together can complete the work in 12 days, how much time would Bruce take individually?", options: ["36 days", "48 days", "72 days", "24 days"], answer: 2 },
+            { topic: "Simple and Compound Interest", question: "Somesh borrowed Rs. 36000 from a bank at a 10% p.a. rate of interest compounded annually. Find the amount to pay to the bank after 3 years.", options: ["Rs. 50,578", "Rs. 45,254", "Rs. 47,916", "Rs. 41,952"], answer: 2 },
+            { topic: "Percentages", question: "Varun spends 16% of his salary on rent. From the remaining, he spends 25% on food and then 30% of the remaining on shopping. If he spends $320 on rent, find the remaining amount after shopping.", options: ["$882", "$972", "$820", "$1028"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "If m:n = 9:7 and m = p+q and n = p-q, then find (p:q).", options: ["8:1", "5:1", "7:1", "9:1"], answer: 0 },
+            { topic: "Percentages", question: "A T-shirt factory had defective rates of 4%, 5%, 10%, 20%, and 12.5% on production of 300, 500, 230, 30, and 480 pieces from Monday to Friday. What is the overall percentage of defective T-shirts?", options: ["6.4%", "10%", "7.4%", "8.18%"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "A company's budget is allocated in the ratio 3:5:7. After revision, the ratio changed to 2:4:7. If the total budget after revision is $210000 and the increase for the second department is $10000, what was the total budget before revision?", options: ["$180000", "$170000", "$178966", "$163846"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "Gloria rows a boat upstream for 20 km and downstream for 40 km. If she takes 8 hours each time, find the speed of the stream.", options: ["2.14 km/hr", "0.84 km/hr", "1.25 km/hr", "3.2 km/hr"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "The ratio of employees in two verticals of a bank is 13:14. If 4 employees are added to each, the ratio becomes 15:16. Find the initial number of employees in each vertical.", options: ["42, 45", "26, 28", "25, 29", "39, 42"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "Alex borrowed a certain amount. The sum amounts to USD 12000 after 2 years and USD 15000 after 3 years (compounded annually). What is the total interest paid by Alex in 3 years?", options: ["USD 7680", "USD 7250", "USD 7000", "USD 7320"], answer: 3 },
+            { topic: "Simple and Compound Interest", question: "Amanda lends Rs. 5000 to her friend Sarath at compound interest. After three years, she gets back Rs. 10985. What is the rate at which she lent the money?", options: ["30%", "25%", "28%", "19%"], answer: 0 },
+            { topic: "Miscellaneous", question: "If one-sixth of a number is subtracted from one-fifth of the same number, the result is 7. What is the number?", options: ["105", "350", "210", "280"], answer: 2 },
+            { topic: "Probability", question: "If two fair dice are rolled simultaneously, what is the probability that the sum of the numbers on their upper faces is 7?", options: ["1/4", "5/6", "1/6", "3/12"], answer: 2 },
+            { topic: "Permutations and Combinations", question: "In how many ways can a team of 11 Basketball players be selected from 6 defenders and 8 attackers such that the team has at least 5 attackers?", options: ["324", "320", "360", "364"], answer: 3 },
+            { topic: "Profit and Loss", question: "A company sells a refrigerator on a 20% profit margin. If the selling price is $240, what was the cost price?", options: ["$240", "$200", "$180", "$100"], answer: 1 },
+            { topic: "Ages", question: "R, G and B are brothers. R and G are twins. At present, the average age of R and G is 3/4 of B's present age. Five years ago, the ratio of G's age to B's age was 3:5. What will be R's age five years from now?", options: ["15 years", "10 years", "20 years", "25 years"], answer: 0 },
+            { topic: "Percentages", question: "Sunil earns $5000 per month and spends 40% on rent and food. Out of the remaining amount, he invests 50% in the share market. What amount is he left with at the end of every month?", options: ["$1800", "$1500", "$1650", "$3000"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "Jacob invests $945,000 in a savings account at x% compounded quarterly in Jan 2020. If the amount in March 2021 is $1,043,356, find x.", options: ["12%", "8%", "20%", "16%"], answer: 1 },
+            { topic: "Miscellaneous", question: "If the remainder obtained on dividing a number 12P (P>0) by 7 is 6, which of the following is a value of P?", options: ["3", "4", "7", "5"], answer: 3 },
+            { topic: "Probability", question: "A factory machine has a 15% chance of producing a defective part. What is the probability that the first defective part is produced on either the 3rd or 4th attempt?", options: ["0.3003", "0.1001", "0.2104", "0.2004"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "If Jake travelled at 3/5th of his usual speed, he would reach his destination 20 minutes late. By how many minutes earlier would he arrive if he travelled at 5/3 of his usual speed?", options: ["12", "18", "16", "20"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "John walks to his school. He covers the first quarter of the distance at 3 kmph, the second quarter at 6 kmph, the third quarter at 4 kmph and the rest at 7 kmph. What is his average speed (in kmph)?", options: ["4.48", "Cannot be determined", "6.3", "5.52"], answer: 0 },
+            { topic: "Data Interpretation", question: "How many residents in locality C read The Bharat Express or The Dawn?", options: ["750", "2250", "1500", "2350"], answer: 1 },
+            { topic: "Profit and Loss", question: "I purchased 2 racing motorcycles at the same price. One was sold at a 10% loss and the other at a 15% loss. Find the overall loss percentage I incurred.", options: ["36%", "25%", "17.5%", "12.5%"], answer: 3 },
+            { topic: "Miscellaneous", question: "If f(m) = m³ - 4m + 8, then find the remainder when f(m) is divided by m-2.", options: ["6", "12", "16", "8"], answer: 3 },
+            { topic: "Time and Work", question: "There are two pipes A and B connected to a 500-liter tank. A fills at 'x' liters/hour, while B drains at 8 liters/hour. If it takes 80 hours to fill the tank with both pipes open, find x.", options: ["18.25", "16.67", "12.33", "14.25"], answer: 3 },
+            { topic: "Probability", question: "Marcus has an unbiased coin and tosses it 9 times. What is the probability that he would get more heads than tails?", options: ["1/4", "193/512", "197/203", "1/2"], answer: 3 },
+            { topic: "Percentages", question: "Anil earns $4500 per month and spends 40% on rent and food. Out of the remaining amount, he invests 50% in the share market. What amount is he left with at the end of every month?", options: ["$1800", "$1650", "$1500", "$1350"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "The speed of a boat in still water is three times the speed of the stream. The boat takes a total of 4.5 hours to go 18 km downstream and return. What is the time taken for the upstream trip?", options: ["3 hours", "1 hour", "2 hours", "1.5 hours"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "Henry travelled from Mumbai to Delhi and returned at constant speeds. His average speed for the entire trip was the arithmetic mean of his onward and return speeds. He travelled 2400 km in 16 hours. Find his onward speed (in kmph).", options: ["100", "160", "120", "150"], answer: 3 },
+            { topic: "Time and Work", question: "A is a workman twice as good as B and therefore can finish a job in 50 days less than B. How many days will they both need to complete the work together?", options: ["32 2/5 days", "33 2/3 days", "33 1/3 days", "34 days"], answer: 2 },
+            { topic: "Percentages", question: "Two candidates contested in an election. The candidate who got 48% of votes lost by 288 votes. What is the total number of votes polled by the winner if no votes were invalid?", options: ["3852", "3744", "3564", "3640"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Arthur and Leo started cycling around a circular track. Arthur completed 7 rounds in 12/5 hours at 25/7 km/hr. Leo completed 9 rounds in 22/7 hours. What is the speed of Leo?", options: ["3.5 km/hr", "3 km/hr", "4.2 km/hr", "4 km/hr"], answer: 3 },
+            { topic: "Probability", question: "A store sells 200 electronic devices: 120 laptops, 50 tablets, and the rest smartphones. If a device is randomly selected, what is the probability that it is not a tablet?", options: ["3/4", "2/3", "3/2", "4/3"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "At a shopping complex, the ratio of security guards to salespersons is 2:12. When 15 more salespersons are hired, the ratio changes to 2:15. What is the difference between the number of salespersons and security guards?", options: ["3", "50", "6", "40"], answer: 1 },
+            { topic: "Probability", question: "There are two different color bikes in a showroom - black and yellow. A man buys two bikes one at a time. The probability that both bikes are of different colors is 16/33. If the number of yellow bikes is eight and the total number of bikes is less than twenty, find the number of black bikes.", options: ["6", "4", "10", "12"], answer: 2 },
+            { topic: "Miscellaneous", question: "Find the difference of the roots of the equation m² - 7m + 12 = 0.", options: ["1", "2", "4", "-1"], answer: 0 },
+            { topic: "Probability", question: "A box contains 7 white and 10 ivory colored game coins. What is the probability of drawing 2 ivory colored coins in succession without replacement?", options: ["9/16", "126/141", "45/136", "10/17"], answer: 2 },
+            { topic: "Simple and Compound Interest", question: "Ally borrowed Rs. 34,000 from a bank at a 20% p.a. rate of interest, compounded annually. Find the amount she has to pay after 4 years.", options: ["Rs. 47,916", "Rs. 45,254", "Rs. 70,502.4", "Rs. 79,511"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "Two trains running in the same direction at 56 km/hr and 80 km/hr completely pass one another in 75 seconds. If the length of the first train is 225 m, what is the length of the second train?", options: ["275 m", "210 m", "300 m", "250 m"], answer: 0 },
+            { topic: "Profit and Loss", question: "A shop sold a wooden bed for $26500 after a 9% discount and incurred a 9% loss. At what price should the owner sell the bed to earn a 9% profit?", options: ["$31790", "$29120", "$31540", "$31740"], answer: 0 },
+            { topic: "Probability", question: "A bag contains 4 orange and 7 purple chocolates. A second bag contains 8 orange and 5 purple chocolates. A chocolate is drawn from each bag. What is the probability that both are purple?", options: ["35/143", "2/11", "5/13", "7/11"], answer: 0 },
+            { topic: "Profit and Loss", question: "Amaira had an amount equal to the list price of a crockery plate. She bought the plate at a 33% discount, which allowed her to buy a set of spoons for Rs. 300 and pay Rs. 35 for transport. What was the initial amount?", options: ["Rs. 1100", "Rs. 1015.15", "Rs. 900", "Rs. 1000"], answer: 1 },
+            { topic: "Percentages", question: "In a company, 25% of women are over 29, and 80% are <= 60. 40% of all women play volleyball. If 20% of women over 60 play volleyball, what percentage of volleyball players are <= 60?", options: ["0.79", "0.82", "0.74", "0.9"], answer: 3 },
+            { topic: "Time and Work", question: "Lin can complete a task in 12 days, John in X days, Chris in 24 days. Lin started. After 3 days, John and Chris joined. If the task is completed in 4 more days, find X.", options: ["16", "18", "15", "14"], answer: 1 },
+            { topic: "Profit and Loss", question: "A shopkeeper marks up an item by 50%. He then offers two successive discounts of 20% and 25%. If the final selling price is $160, what is the cost price?", options: ["$260", "$240", "$200", "$177.77"], answer: 3 },
+            { topic: "Percentages", question: "Gia scores 30% on a test. After review, her score increases by 20%, but she still fails by 8 marks. If her post-review score increased by 25%, she would have 10 more than the passing score. What is the passing percentage?", options: ["38.67%", "39.20%", "40%", "36.75%"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "After putting 48 pink balls and 32 blue balls in a box, the ratio becomes 3:2. If the initial number of blue balls was 18, how many pink balls needed to be added initially to make the ratio 2:1?", options: ["9", "16", "12", "18"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "The income of A, B, and C are in the ratio 3:4:5 and their expenditures are in the ratio 2:3:4. If A saves $600, B saves $800, and C saves $1000, what is the total income of A, B, and C?", options: ["$3200", "$2400", "$7200", "$6000"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "In a 40-liter syrup solution, the ratio of syrup to liquid X is 3:2. To change the ratio to 1:3, how much liquid X needs to be added?", options: ["72 liters", "66 liters", "21 liters", "56 liters"], answer: 3 },
+            { topic: "Time and Work", question: "Caleb can work 2/5 times as fast as Charles and Cameron together. Caleb and Cameron can work together two times as fast as Charles. If Caleb takes 20 days to complete a task alone, how long would Charles take?", options: ["120/7 days", "12 days", "105/8 days", "15 days"], answer: 0 },
+            { topic: "Simple and Compound Interest", question: "At what rate of compounded interest per annum will a sum of $3000 become $3600 in 2 years?", options: ["11%", "8%", "5%", "9.54%"], answer: 3 },
+            { topic: "Miscellaneous", question: "If the remainder obtained on dividing a number 12P (P>0) by 7 is 6, which of the following is a value of P?", options: ["3", "4", "7", "5"], answer: 3 },
+            { topic: "Simple and Compound Interest", question: "Vinay borrowed Rs. 32000 from a bank at a 10% p.a. rate of interest compounded annually. Find the amount he has to pay after 3 years.", options: ["Rs. 45,254", "Rs. 47,916", "Rs. 42,592", "Rs. 50,578"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "P and Q appeared in an exam. The sum of P's score and thrice Q's score is 350. The difference of twice P's score and Q's score is 63. Find the ratio of scores of P and Q.", options: ["13:11", "13:12", "12:11", "11:13"], answer: 0 },
+            { topic: "Data Interpretation", question: "How many students doing mechanical engineering in college Q were from India?", options: ["75", "65", "72", "60"], answer: 1 },
+            { topic: "Data Interpretation", question: "If the temperature on Thursday (18°) was increased by 1/4th of the second highest temperature of the week (24°), what would be the new temperature on Thursday?", options: ["18°", "35°", "30°", "24°"], answer: 3 },
+            { topic: "Miscellaneous", question: "Find the missing term in the sequence: 13, 40, ?, 411, 1297, 4016", options: ["128", "140", "119", "123"], answer: 3 },
+            { topic: "Data Interpretation", question: "If the monthly expenditure on entertainment for all five persons is the same, for how many persons was this expenditure between 8% and 11% of their total monthly expenditure?", options: ["4", "2", "1", "3"], answer: 3 },
+            { topic: "Data Interpretation", question: "In which year did any company record the highest percentage increase in its income over the previous year?", options: ["2015", "2014", "2016", "2013"], answer: 3 },
+            { topic: "Data Interpretation", question: "What is the percentage of total mobile phones sold online in June and July combined to March, April, and May combined in 2018?", options: ["71.20%", "Cannot be Determined", "66.67%", "74.67%"], answer: 3 },
+            { topic: "Percentages", question: "The price of a play station becomes $480 after it decreases by 20%. Find the original price.", options: ["$625", "$550", "$600", "$400"], answer: 2 },
+            { topic: "Geometry", question: "In the given figure, AB || CD, AD=BC, AE=7 cm and area(ADE):area(AEC) is 1:3. Which can be the area of trapezium ABCD if sides are integers?", options: ["92 cm²", "70 cm²", "135 cm²", "168 cm²"], answer: 3 },
+            { topic: "Time and Work", question: "A group of workers can complete a task in 15 days. After working for 5 days, 3 workers leave, and the remaining workers complete the task in 12 more days. How many workers were there initially?", options: ["10", "18", "9", "12"], answer: 2 },
+            { topic: "Data Interpretation", question: "If Andy spent $50 on food (20% of expenses), what are his total monthly expenses?", options: ["$2000", "$2750", "$3750", "$250"], answer: 3 },
+            { topic: "Data Interpretation", question: "Determine the difference of ratios between (Leisure and Commuting) & (Sleeping and Working).", options: ["5/6", "2/5", "4/9", "3/7"], answer: 0 },
+            { topic: "Geometry", question: "A square JKLM is circumscribed by a circle of radius 8cm. What is the area of the square?", options: ["128 cm²", "16√2 cm²", "64√2 cm²", "64 cm²"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "8% of P's income = 24% of Q's income, and 16% of Q's income = 32% of R's income. If R's income is Rs. 36000, what is the total income of P, Q, and R?", options: ["Rs. 125000", "Rs. 324000", "Rs. 252000", "Rs. 100000"], answer: 1 },
+            { topic: "Data Interpretation", question: "Total expenditure is $500,000. If Miscellaneous expenditure (10%) was increased by 50%, calculate the revised total expenditure.", options: ["$725,000", "$625,000", "$545,000", "$525,000"], answer: 3 },
+            { topic: "Geometry", question: "In the given figure, line p and line r intersect. What are the respective values of x, y, and z (in degrees)?", options: ["130, 15, 130", "120, 50, 95", "130, 25, 120", "130, 130, 35"], answer: 2 },
+            { topic: "Data Interpretation", question: "The total rice produced from 2011 to 2016 is approximately what percentage of the total food grains production in 2013?", options: ["0.75", "2.09", "2.29", "228.8%"], answer: 3 },
+        ];
+
+
+        const appState = {
+            currentTopic: 'All',
+            score: 0,
+            totalAnswered: 0,
+            answeredQuestions: new Set(),
+        };
+
+        const topicNav = document.getElementById('topic-nav');
+        const questionsContainer = document.getElementById('questions-container');
+        const currentTopicTitle = document.getElementById('current-topic-title');
+        const scoreTracker = document.getElementById('score-tracker');
+        const introSection = document.getElementById('intro-section');
+        const sidebar = document.getElementById('sidebar');
+        const menuToggle = document.getElementById('menu-toggle');
+
+        function getTopics() {
+            const topics = new Set(questions.map(q => q.topic));
+            return ['All', ...Array.from(topics).sort()];
+        }
+
+        function renderTopics() {
+            const topics = getTopics();
+            topicNav.innerHTML = '';
+            const list = document.createElement('ul');
+            list.className = 'space-y-2';
+
+            topics.forEach(topic => {
+                const item = document.createElement('li');
+                const button = document.createElement('button');
+                button.textContent = topic;
+                button.className = 'w-full text-left px-4 py-2 rounded-md transition duration-200';
+                if (topic === appState.currentTopic) {
+                    button.classList.add('bg-slate-800', 'text-white', 'font-semibold');
+                } else {
+                    button.classList.add('text-slate-600', 'hover:bg-slate-100', 'hover:text-slate-900');
+                }
+                button.onclick = () => {
+                    appState.currentTopic = topic;
+                    renderApp();
+                    if(window.innerWidth < 768) {
+                        sidebar.classList.remove('open');
+                    }
+                };
+                item.appendChild(button);
+                list.appendChild(item);
+            });
+            topicNav.appendChild(list);
+        }
+
+        function renderQuestions() {
+            questionsContainer.innerHTML = '';
+            const filteredQuestions = appState.currentTopic === 'All'
+                ? questions
+                : questions.filter(q => q.topic === appState.currentTopic);
+
+            if (filteredQuestions.length === 0 && appState.currentTopic !== 'All') {
+                questionsContainer.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-md text-center"><p class="text-slate-500">No questions available for this topic yet.</p></div>`;
+            } else {
+                 filteredQuestions.forEach((q, index) => {
+                    const questionId = `${appState.currentTopic.replace(/\s+/g, '-')}-${index}`;
+                    const questionCard = document.createElement('div');
+                    questionCard.className = 'bg-white p-6 rounded-lg shadow-md';
+                    questionCard.setAttribute('data-question-id', questionId);
+
+                    const questionText = document.createElement('p');
+                    questionText.className = 'font-semibold text-lg mb-4 text-slate-900';
+                    questionText.innerHTML = `${index + 1}. ${q.question}`;
+
+                    const optionsGrid = document.createElement('div');
+                    optionsGrid.className = 'grid grid-cols-1 md:grid-cols-2 gap-3';
+
+                    q.options.forEach((option, optionIndex) => {
+                        const optionBtn = document.createElement('button');
+                        optionBtn.innerHTML = option;
+                        optionBtn.className = 'option-btn w-full text-left p-3 border border-slate-300 rounded-md hover:bg-slate-100 transition duration-200';
+                        optionBtn.setAttribute('data-option-index', optionIndex);
+                        optionBtn.onclick = () => handleAnswer(q, optionIndex, questionId);
+                        optionsGrid.appendChild(optionBtn);
+                    });
+                    
+                    const controlsContainer = document.createElement('div');
+                    controlsContainer.id = `controls-${questionId}`;
+                    controlsContainer.className = 'mt-4 flex space-x-2';
+                    
+                    const explanationContainer = document.createElement('div');
+                    explanationContainer.id = `explanation-${questionId}`;
+                    explanationContainer.className = 'explanation-container whitespace-pre-wrap';
+                    
+                    const generatedQuestionContainer = document.createElement('div');
+                    generatedQuestionContainer.id = `generated-q-${questionId}`;
+                    generatedQuestionContainer.className = 'mt-4';
+
+                    questionCard.appendChild(questionText);
+                    questionCard.appendChild(optionsGrid);
+                    questionCard.appendChild(controlsContainer);
+                    questionCard.appendChild(explanationContainer);
+                    questionCard.appendChild(generatedQuestionContainer);
+                    questionsContainer.appendChild(questionCard);
+                });
+            }
+        }
+        
+        function handleAnswer(question, selectedIndex, questionId) {
+            if (appState.answeredQuestions.has(questionId)) return;
+
+            appState.totalAnswered++;
+            appState.answeredQuestions.add(questionId);
+
+            const isCorrect = selectedIndex === question.answer;
+            if (isCorrect) {
+                appState.score++;
+            }
+
+            const questionCard = document.querySelector(`[data-question-id="${questionId}"]`);
+            const optionButtons = questionCard.querySelectorAll('.option-btn');
+
+            optionButtons.forEach((btn, index) => {
+                btn.disabled = true;
+                if (index === selectedIndex) {
+                    btn.classList.add(isCorrect ? 'correct' : 'incorrect');
+                }
+                if (index === question.answer && !isCorrect) {
+                     btn.classList.add('correct');
+                }
+            });
+            
+            const controlsContainer = document.getElementById(`controls-${questionId}`);
+            controlsContainer.innerHTML = ''; 
+            
+            const explainBtn = document.createElement('button');
+            explainBtn.innerHTML = '✨ Explain Answer';
+            explainBtn.className = 'px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-200';
+            explainBtn.onclick = () => getExplanation(question, questionId);
+            
+            const similarQBtn = document.createElement('button');
+            similarQBtn.innerHTML = '✨ Generate Similar Question';
+            similarQBtn.className = 'px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition duration-200';
+            similarQBtn.onclick = (e) => {
+                e.target.disabled = true;
+                e.target.textContent = 'Generating...';
+                getSimilarQuestion(question, questionId);
+            };
+
+            controlsContainer.appendChild(explainBtn);
+            controlsContainer.appendChild(similarQBtn);
+
+            updateScore();
+        }
+
+        async function getExplanation(question, questionId) {
+            const controlsContainer = document.getElementById(`controls-${questionId}`);
+            const explanationContainer = document.getElementById(`explanation-${questionId}`);
+            const explainBtn = controlsContainer.querySelector('button:first-child');
+            if (explainBtn) explainBtn.style.display = 'none';
+
+            explanationContainer.innerHTML = '<div class="loader mx-auto"></div>';
+            explanationContainer.style.display = 'block';
+
+            const optionsText = question.options.map((opt, i) => `${String.fromCharCode(65 + i)}) ${opt}`).join('\n');
+            const prompt = `Please provide a clear, step-by-step explanation for the following aptitude question. Explain the logic and calculations needed to arrive at the correct answer.
+
+Question: ${question.question}
+Options:
+${optionsText}
+
+Correct Answer: ${question.options[question.answer]}`;
+
+            const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                let explanationText = "Sorry, I couldn't generate an explanation for this question.";
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    explanationText = result.candidates[0].content.parts[0].text;
+                }
+                
+                explanationContainer.innerHTML = explanationText;
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                explanationContainer.innerHTML = `An error occurred while fetching the explanation: ${error.message}`;
+            }
+        }
+
+        async function getSimilarQuestion(originalQuestion, questionId) {
+            const generatedQuestionContainer = document.getElementById(`generated-q-${questionId}`);
+            generatedQuestionContainer.innerHTML = '<div class="loader mx-auto"></div>';
+
+            const prompt = `Based on the following aptitude question on the topic of "${originalQuestion.topic}", generate a new, similar multiple-choice question. The new question must test the same core concept but use different numbers, scenarios, or wording. Provide the response as a JSON object with the keys: "question", "options" (an array of 4 strings), and "answer" (the 0-based index of the correct option).
+
+Original Question: "${originalQuestion.question}"`;
+
+            const payload = {
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: {
+                  responseMimeType: "application/json",
+                  responseSchema: {
+                      type: "OBJECT",
+                      properties: {
+                          "question": { "type": "STRING" },
+                          "options": {
+                              "type": "ARRAY",
+                              "items": { "type": "STRING" }
+                          },
+                          "answer": { "type": "NUMBER" }
+                      },
+                      required: ["question", "options", "answer"]
+                  }
+              }
+            };
+
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+                const result = await response.json();
+                const jsonText = result.candidates[0].content.parts[0].text;
+                const newQ = JSON.parse(jsonText);
+
+                renderGeneratedQuestion(newQ, generatedQuestionContainer);
+
+            } catch (error) {
+                console.error("Error generating similar question:", error);
+                generatedQuestionContainer.innerHTML = `<p class="text-red-500 text-center">Failed to generate a similar question. Please try again.</p>`;
+            }
+        }
+        
+        function renderGeneratedQuestion(q, container) {
+            container.innerHTML = '';
+            const card = document.createElement('div');
+            card.className = 'bg-slate-50 p-4 rounded-lg border border-purple-200 mt-4';
+
+            const title = document.createElement('h4');
+            title.className = 'font-bold text-purple-700 mb-2';
+            title.textContent = '✨ Here is a similar question to practice:';
+            
+            const questionText = document.createElement('p');
+            questionText.className = 'font-semibold text-md mb-3 text-slate-800';
+            questionText.textContent = q.question;
+
+            const optionsGrid = document.createElement('div');
+            optionsGrid.className = 'grid grid-cols-1 md:grid-cols-2 gap-2';
+
+            q.options.forEach((option, optionIndex) => {
+                const btn = document.createElement('button');
+                btn.textContent = option;
+                btn.className = 'option-btn w-full text-left p-2 border border-slate-300 rounded-md hover:bg-slate-200 transition duration-200 text-sm';
+                btn.onclick = (e) => {
+                    const allBtns = optionsGrid.querySelectorAll('button');
+                    allBtns.forEach(b => b.disabled = true);
+                    if (optionIndex === q.answer) {
+                        e.target.classList.add('correct');
+                    } else {
+                        e.target.classList.add('incorrect');
+                        allBtns[q.answer].classList.add('correct');
+                    }
+                };
+                optionsGrid.appendChild(btn);
+            });
+
+            card.appendChild(title);
+            card.appendChild(questionText);
+            card.appendChild(optionsGrid);
+            container.appendChild(card);
+        }
+
+
+        function updateScore() {
+            scoreTracker.textContent = `Score: ${appState.score} / ${appState.totalAnswered}`;
+        }
+        
+        function resetState() {
+            appState.score = 0;
+            appState.totalAnswered = 0;
+            appState.answeredQuestions.clear();
+        }
+
+        function renderApp() {
+            resetState();
+            document.title = `${appState.currentTopic} - Aptitude Practice`;
+            currentTopicTitle.textContent = `${appState.currentTopic} Questions`;
+            introSection.style.display = 'none';
+            renderTopics();
+            renderQuestions();
+            updateScore();
+        }
+        
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            appState.currentTopic = 'All';
+            currentTopicTitle.textContent = "Welcome!";
+            introSection.style.display = 'block';
+            renderTopics();
+            questionsContainer.innerHTML = '';
+        });
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTS Aptitude Questions Practice App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Calm Harmony (Warm Neutrals) -->
+    <!-- Application Structure Plan: The SPA is designed as an interactive quiz platform. A sidebar allows users to select a specific aptitude topic (e.g., Ages, Geometry) or view all questions. The main area displays the questions for the selected topic in a scrollable list of cards. Users can click an option to get immediate feedback (correct/incorrect highlighting) and see their score update. This structure was chosen to transform the static document into an active learning tool, allowing for focused practice and self-assessment, which is more effective for exam preparation than passively reading a list. -->
+    <!-- Visualization & Content Choices: Report Info: Aptitude questions and answers. Goal: Interactive practice. Presentation: Questions are displayed in individual cards with clickable buttons for options. Interaction: Clicking a topic button filters the questions. Clicking an answer button checks for correctness and provides visual feedback (color change). A new "Explain Answer" button appears after answering, which calls the Gemini API to generate and display a step-by-step solution. A "Generate Similar Question" button also appears, calling Gemini to create a new, on-the-fly practice problem based on the original. Justification: This card-based quiz format with immediate feedback and AI-powered explanations/question generation is highly intuitive and engaging for a practice test application. Library/Method: Vanilla JS for logic, Tailwind CSS for styling, Gemini API for explanations and question generation. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+        }
+        .option-btn:disabled {
+            cursor: not-allowed;
+        }
+        .correct {
+            background-color: #22c55e !important;
+            color: white !important;
+            border-color: #16a34a !important;
+        }
+        .incorrect {
+            background-color: #ef4444 !important;
+            color: white !important;
+            border-color: #dc2626 !important;
+        }
+        .explanation-container {
+            display: none;
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f8fafc;
+            border-left: 4px solid #64748b;
+            color: #334155;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 24px;
+            height: 24px;
+            animation: spin 2s linear infinite;
+            margin-top: 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div id="app" class="flex h-screen overflow-hidden">
+        
+        <button id="menu-toggle" class="md:hidden fixed top-4 left-4 z-30 bg-slate-800 text-white p-2 rounded-md">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+            </svg>
+        </button>
+
+        <aside id="sidebar" class="sidebar fixed md:relative z-20 w-64 bg-white h-full flex-shrink-0 shadow-lg p-5 overflow-y-auto">
+            <div class="flex flex-col h-full">
+                <h1 class="text-2xl font-bold text-slate-900 mb-6">Aptitude Topics</h1>
+                <nav id="topic-nav" class="flex-grow">
+                </nav>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white shadow-md p-4 z-10">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-slate-900" id="current-topic-title">Welcome!</h2>
+                    <div id="score-tracker" class="text-lg font-semibold bg-slate-800 text-white px-4 py-2 rounded-lg">
+                        Score: 0 / 0
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex-1 overflow-y-auto p-4 md:p-8">
+                 <div id="intro-section" class="bg-white p-6 rounded-lg shadow-md mb-8">
+                    <h3 class="text-xl font-bold mb-2 text-slate-900">Welcome to Your Interactive Aptitude Practice!</h3>
+                    <p class="text-slate-600">This tool is designed to help you sharpen your skills by practicing aptitude questions from various topics. To get started, select a topic from the sidebar on the left. The questions for that topic will appear here. For each question, choose the answer you think is correct. You'll get immediate feedback on your choice. Your score will be tracked at the top right. Good luck!</p>
+                </div>
+                <div id="questions-container" class="space-y-6">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const questions = [
+            { topic: "Ages", question: "Five Years ago, Parn's age was three times of Sarath's age. Five years hence, Parn's age will be twice Sarah's age. After how many years from now will their combined age be 80 years?", options: ["14", "12", "13", "15"], answer: 0 },
+            { topic: "Simple and Compound Interest", question: "Lily invested $525 under a simple interest of 12% per annum. Find the amount received by her after two years.", options: ["$625", "$527", "$651", "$650"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "Two number are in the ratio 13:11. If the difference of the numbers is 8, then find the smaller of the two numbers.", options: ["42", "44", "52", "66"], answer: 1 },
+            { topic: "Data Interpretation", question: "The number of students who like Hockey in class 8 is what percentage of the number of students who like Table tennis in class 12?", options: ["0.3267", "0.4444", "0.8888", "0.7225"], answer: 1 },
+            { topic: "Miscellaneous", question: "In a certain month, the total income of Adam, Bruce and Charles is $24,000. In that month, Adam spends 75% of his income, Bruce spends 60% of his income, and Charles spends 72% of his income. Sum of expenditures of all three in that month is $16,800. If the ratio of the amount saved by Adam, Bruce and Charles is 5:6:7, then find the savings of Bruce in the month.", options: ["$2000", "$2800", "$2500", "$2400"], answer: 3 },
+            { topic: "Miscellaneous", question: "Which of the following is the second smallest prime factor of (2^10 - 4)?", options: ["5", "3", "1", "2"], answer: 1 },
+            { topic: "Percentages", question: "Hermoine fills a water tank to 75% of its capacity. If she draws 10 liters of water out of the tank, then the water level in the tank becomes 62.5% of its capacity. Find the capacity of the tank.", options: ["75 liters", "84 liters", "72 liters", "80 liters"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "There are 7 points on a plane, out of which 3 points lie on a straight line, and no other three points lie on a straight line. Find the number of triangles that can be formed using these points.", options: ["34", "36", "28", "32"], answer: 0 },
+            { topic: "Miscellaneous", question: "Jennifer went on a trip to three cities. In each city she spent $25 more than half the amount she had with her when she arrived in the city. At the end of the tour she had $40. Find the amount that she started with.", options: ["676", "670", "526", "496"], answer: 1 },
+            { topic: "Geometry", question: "In the given figure, what is the ratio of the perimeter of the two circles that circumscribe and inscribe a square of side 16cm?", options: ["√2:1", "1:2", "1:√2", "2:1"], answer: 0 },
+            { topic: "Percentages", question: "There are three natural numbers. The first and second are more than the third by 32% and 36% respectively. What Percentage of the First number is the Second number?", options: ["103.03%", "101.56%", "103.12%", "106.25%"], answer: 2 },
+            { topic: "Geometry", question: "Product of sides of a triangle is 576 cm³. If area of the triangle is 32 cm², then, find the circumradius.", options: ["9 cm", "18 cm", "4.5 cm", "13.5 cm"], answer: 2 },
+            { topic: "Profit and Loss", question: "Bonny gained 20% by selling a novel at $120. Find the price at which she purchased the novel.", options: ["$155", "$140", "$120", "$100"], answer: 3 },
+            { topic: "Profit and Loss", question: "A shopkeeper sold 4 laptops for $800 each. The first laptop was sold at a 25% profit, the second at a 10% loss, the third at a 5% profit, and fourth at a 20% loss. Find the shopkeeper's net profit or loss.", options: ["$60.48 profit", "$90.79 loss", "$60.48 loss", "$91.32 profit"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "If Ray can run a certain distance in 8 hours at 65 kmph, and Dev can cover the same distance in 4 hours at 70 kmph, find the ratio of their distances (assuming they cover the same distance).", options: ["12:7", "13:7", "11:7", "1:1"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "Patric invests a certain sum of money in a business in a chocolate factory. Qaza contributes thrice of Patrick's amount, and Richard contributes 5/3rd of Qaza's total. If the yearly profit is USD 711000, What is Qaza's share?", options: ["USD 395000", "USD 700000", "USD 237000", "USD 79000"], answer: 2 },
+            { topic: "Data Interpretation", question: "From the school table, what is the total number of students who appeared from schools M, O and P together?", options: ["21000", "18000", "17000", "12000"], answer: 2 },
+            { topic: "Geometry", question: "From an external point, a tangent is drawn to a circle with a radius of 8cm. If the distance from the external point to the centre of the circle is 15cm, find the length of the tangent.", options: ["12.6cm", "18cm", "22.6cm", "8.2 cm"], answer: 0 },
+            { topic: "Data Interpretation", question: "From the adults pie chart, what is the difference between the number of male and female lawyers? Total adults: 98000, Male:Female ratio 25:24.", options: ["2400", "2530", "2600", "2480"], answer: 3 },
+            { topic: "Data Interpretation", question: "From the adults pie chart, what is the number of males who are unemployed as a percentage of the total unemployed persons in the city?", options: ["0.505", "0.385", "0.565", "0.4"], answer: 1 },
+            { topic: "Ratio and Proportion", question: "The total quantity of potatoes of three types in a basket is 120 kg. If the ratio of the quantity of the first type to the second type is 3:4, and the ratio of the second type to the third type is 7:9, what is the quantity of the second type of potatoes?", options: ["39 Kg", "54 Kg", "60 Kg", "30 Kg"], answer: 0 },
+            { topic: "Profit and Loss", question: "What is the selling price of the tools, if the company buys a set of tools for $300 and makes a 50% profit on selling price?", options: ["$550", "$450", "$400", "$600"], answer: 3 },
+            { topic: "Geometry", question: "In the given figure, AB || CD and AD=BC. AE=7cm and ratio of area of triangle ADE AND AEC is 1:3. Which among the given option can be the area of trapezium ABCD, if sides are in integer?", options: ["92 cm²", "70 cm²", "135 cm²", "168 cm²"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "Drake covered 40% of a certain distance at 20 km/hr, 50% of the remaining distance at 10 km/hr. If his total travelled time is 8 hours, then find the total distance covered by him.", options: ["443/3 km", "400/3 km", "322/3 km", "500/3 km"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Morrie and Maryline start simultaneously from Block P and Block Q and walk towards Block Q and P respectively. Block P and Block Q are 1200 m apart. They meet for the second time at point S, 500 m from Block Q. Find the ratio of the speed of Morrie and Maryline.", options: ["17:19", "19:17", "29:31", "31:29"], answer: 1 },
+            { topic: "Percentages", question: "If the expenditure on rent of mark is 30% more than that of clint, then what percentage of the monthly expenditure of mark was spent on rent?", options: ["0.34125", "0.0653", "0.3627", "0.136"], answer: 0 },
+            { topic: "Percentages", question: "A shopkeeper marked an item at a certain percentage cost above cost price. If he sells the item after giving 25% discount, he makes a profit of 41%. What would be the profit percentage made by him on selling the item after giving a discount of 35%?", options: ["23.4%", "22.2%", "20%", "21.8%"], answer: 1 },
+            { topic: "Percentages", question: "In recent parliament election, there are only two candidates P and Q. P got 58% of the votes and won by 384 votes. What is the total number of votes in the parliament elections (including invalid votes) given that there are invalid votes?", options: ["2450", "2100", "2400", "2540"], answer: 2 },
+            { topic: "Permutations and Combinations", question: "How many 6 digit numbers can be formed using 5, 7, 9, 0, 1, 8 when repetition of digits is allowed?", options: ["600", "720", "19440", "38880"], answer: 2 },
+            { topic: "Simple and Compound Interest", question: "Jane invested $6000 in a savings bank account that earns 10% interest compounded annually. What's the total amount at the end of 2 years?", options: ["$7260", "$7200", "$6600", "$6900"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "Patrick invests a certain sum of money in a business. Qaza contributes thrice of Patrick's amount, and Richard contributes 5/3rd of Qaza's total. If the yearly profit is USD 711000, what is Qaza's share?", options: ["USD 395000", "USD 700000", "USD 237000", "USD 79000"], answer: 2 },
+            { topic: "Time and Work", question: "A does 70% of a work in 40 days. He then calls in B and they together finish the remaining work in 6 days. How long would B alone take to do the whole work?", options: ["25.46 days", "50.62 days", "15.28 days", "30.77 days"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "Car M started driving East from point P at 8.00 am. Car N started driving East from point P at 11.00 am. The ratio of the speeds of M and N is 4:5. Find their meeting time.", options: ["2:24 p.m", "12:12 p.m", "11:00 p.m", "12:24 p.m"], answer: 0 },
+            { topic: "Profit and Loss", question: "If the gain incurred by selling a laptop is 1/5th of its cost price, then find the gain percent.", options: ["20%", "23.25%", "25.67%", "33.33%"], answer: 0 },
+            { topic: "Miscellaneous", question: "Meredith Palmer has $320 in the denomination of $1 notes, $5 notes and $10 notes. The number of notes of each denomination is equal. What is the total number of notes that she has?", options: ["45", "60", "75", "50"], answer: 1 },
+            { topic: "Ratio and Proportion", question: "Two numbers are respectively 20% and 50% more than a third number. The ratio of the two numbers is:", options: ["3:5", "2:5", "4:5", "5:4"], answer: 2 },
+            { topic: "Percentages", question: "Juhi secured 49.5% of the total votes polled in an election. She lost to her contestant by 20000 votes. All the votes polled were valid. Find the number of votes polled if there were only two contestants.", options: ["1000000", "200000", "2000000", "20000000"], answer: 2 },
+            { topic: "Ages", question: "Five years ago, Pam's age was three times Sarah's age. Five years hence, Pam's age will be twice Sarah's age. After how many years from now will their combined age be 76 years?", options: ["13", "14", "15", "12"], answer: 0 },
+            { topic: "Profit and Loss", question: "Mike bought a smartphone, which had MRP of $2400, for a discount of 5% and sold it to Jim for a profit of 10%. Jim used it for 2 months and sold the same to his friend at a loss of 33.33%. At what price did Jim sell it?", options: ["$1680", "$1800", "$2233", "$1698"], answer: 0 },
+            { topic: "Time and Work", question: "Lione can complete a task in 12 days, John can complete it in 18 days. Chris can complete the same task in x days. Chris started the task. After 3 days, Lione and John joined. If the task is completed in 4 more days, then find the value of x.", options: ["17.28", "15.75", "16.5", "14.25"], answer: 0 },
+            { topic: "Permutations and Combinations", question: "If words are formed from rearranging the letters of word 'CONTRACT', then which word is the 6301th?", options: ["RANCCTOT", "RACNTTOC", "RACCNOTT", "RACNOTCT"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Morrie and Maryline start simultaneously from Block P and Block Q (1200m apart). They meet for the second time at point S, 500 m from Block Q. Find the ratio of the speed of Morrie and Maryline.", options: ["19:17", "29:31", "17:19", "31:29"], answer: 0 },
+            { topic: "Time and Work", question: "18 men can complete a piece of work in 20 days and women can complete a piece of work in 32 days. 18 men started the work and after 15 days, they were replaced by x women. If x women can complete the work in 16 days, what is the value of x?", options: ["8", "12", "15", "10"], answer: 3 },
+            { topic: "Miscellaneous", question: "In an examination, Mark scores 4 marks for every correct answer and loses 1/4th of mark for every wrong answer. If he attempts 80% of 50 questions and secures 135 marks, the number of questions he attempted correctly is:", options: ["40", "32", "35", "38"], answer: 2 },
+            { topic: "Time and Work", question: "Three workers X,Y,Z, paint a house. X takes 15 days alone, Y takes 20 days alone, and Z takes 30 days alone. X starts painting and works for 5 days. Then, Y and Z join X to finish the job. How many days will it take to complete the remaining work?", options: ["4", "4.44", "5", "5.55"], answer: 1 },
+            { topic: "Profit and Loss", question: "Burak owns a shop of video players. He purchased a video player for $1200, and marked the price so that by offering a discount of 20%, he would earn a profit of 10%. Find the marked price of the Video player.", options: ["$1575", "$1550", "$1650", "$1425"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "A delivery truck covers a distance of 270 km at 60 kmph and the next 120 km at 75 kmph. What is the average speed of the truck (in kmph)?", options: ["70.2 kmph", "67.5 kmph", "64.5 kmph", "60.6 kmph"], answer: 1 },
+            { topic: "Time and Work", question: "At their usual efficiency levels, Siri and Bianca together finish a task in 16 days. If Siri had worked half as efficiently and Bianca twice as efficiently, the task would have been completed in 12 days. How many days would Siri take to finish the task alone at twice her usual efficiency?", options: ["12 days", "7.2 days", "18 days", "9.6 days"], answer: 3 },
+            { topic: "Profit and Loss", question: "Garcia sold his bike at 14% profit. Had he charged $120 more, his profit would have been 17%. What is the cost price of the bike?", options: ["$4000", "$3600", "$4500", "$5000"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "Jacques, a con-man, was running along a road at 10 km/hr. He crossed a policeman moving at a speed of 15 km/hr in the opposite direction. The policeman had to continue for 7 minutes before he could start chasing him. Find the total time taken (in minutes) by the policeman to catch the con-man from the time he crossed him.", options: ["42", "55", "35", "30"], answer: 0 },
+            { topic: "Simple and Compound Interest", question: "If you invest $200 at a simple interest rate of 5% per year, how much interest will you earn after 3 years?", options: ["$40", "$50", "$60", "$30"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "A committee of 4 people needs to be formed from a group of 8 students. However, two specific students, X and Y must be included in the committee. In how many different ways can the committee be formed?", options: ["12", "18", "10", "15"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "There are 18 points on a plane surface such that no three points are in a line. How many distinct triangles can be formed by joining these points?", options: ["1224", "816", "2448", "408"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Billiard, a con-man, was running along a road at 12 km/hr. He crossed a cop moving at a speed of 15 km/hr in the opposite direction. The cop had to continue for 7 minutes before he could start chasing him. Find the total time taken (in minutes) by the cop to catch Billiard from the time he crossed him.", options: ["70", "54", "45", "63"], answer: 3 },
+            { topic: "Profit and Loss", question: "Two articles are bought at the same price. One is sold at 15% profit and other at 13% profit. Find the overall profit percentage.", options: ["28%", "30%", "14%", "16%"], answer: 2 },
+            { topic: "Averages", question: "The average weight of a class of 40 students is 35 kg. If one student leaves the class, the average weight of the class drops by 200 gm. What is the weight of the student who left?", options: ["42.8 kg", "44.6 kg", "37.4 kg", "42.8 kg"], answer: 0 },
+            { topic: "Profit and Loss", question: "Stokes sold his bat at a loss of 10%. If he had sold it for Rs. 100 more, he would have made a profit of 18%. What is the approx. cost of the bat?", options: ["Rs. 357.10", "Rs. 365.30", "Rs. 380.50", "Rs. 410"], answer: 0 },
+            { topic: "Time and Work", question: "Jacob and Carl can complete a piece of work in 18 and 24 days respectively. They worked together for 4 days after which Jacob was replaced by Dixon. If the work gets completed in another 8 days, then calculate the number of days in which Dixon alone could complete twice the original work.", options: ["57.6 days", "50 days", "52.5 days", "48 days"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "A delivery truck covers a distance of 270 km. The first 120 km is covered at 60 kmph and the rest is covered at 75 kmph. What is the average speed of the truck (in kmph)?", options: ["64.5 kmph", "67.5 kmph", "60.6 kmph", "70.2 kmph"], answer: 1 },
+            { topic: "Ratio and Proportion", question: "At a certain mall, the ratio of the number of security guards to the number of salespersons is 3:13. When 12 more salespersons are hired, the ratio changes to 3:16. What will be the difference between the number of salespersons and security guards?", options: ["52", "3", "40", "9"], answer: 0 },
+            { topic: "Geometry", question: "In an equilateral triangle XYZ, J, K, and L are the midpoints of XY, XZ, and YZ respectively. The area of triangle JKL is 12.13 cm². What is the area of equilateral triangle XYZ?", options: ["3.03 cm²", "48 cm²", "24.26 cm²", "48.52 cm²"], answer: 3 },
+            { topic: "Profit and Loss", question: "By selling a silver dinner set for Rs. 74500, the jeweler incurs a loss of 20%. What is the profit or loss percentage if he sells the silver dinner set at Rs. 98000?", options: ["5.23% Profit", "4.8% Loss", "5.75% Profit", "5.23% Loss"], answer: 0 },
+            { topic: "Permutations and Combinations", question: "What is the rank of the word 'GARDEN' when the letters of the word are arranged in dictionary order?", options: ["387", "401", "360", "379"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "Two types of magnets, A and B, are stored in a ratio of 4:7 in a science lab. If the total number of magnets is 66, how many of each type are there?", options: ["20, 40", "33, 66", "24, 42", "32, 42"], answer: 2 },
+            { topic: "Probability", question: "A fair coin is tossed nine times. What is the probability of getting heads at least once?", options: ["9/512", "511/512", "503/512", "1/512"], answer: 1 },
+            { topic: "Permutations and Combinations", question: "In how many ways a team of 11 Basketball players be selected out of 6 defenders and 8 attackers such that the team has at least 5 attackers?", options: ["360", "324", "30", "364"], answer: 3 },
+            { topic: "Ages", question: "Smith got married 18 years ago. Now, his age is 150% of his age when he got married. If his son's present age is 1/9th of his present age, find his son's present age.", options: ["6 years", "4 years", "5 years", "8 years"], answer: 1 },
+            { topic: "Miscellaneous", question: "Determine whether the ordered triple (1, -3, 2) is a solution to the system: 1. 2x+y+3z=7, 2. x+2y+5z=14, 3. 3x+y-2z=10", options: ["yes, for eq 1 only", "yes, for eq 3 only", "No, not a solution", "yes, for all equations"], answer: 0 },
+            { topic: "Miscellaneous", question: "If f(m) = km² - 4m + 3k is divisible by m-3, then find the value of k.", options: ["-1", "1", "0", "-2"], answer: 1 },
+            { topic: "Geometry", question: "In a triangle ABC, AP, BQ and CR are medians intersecting at O. If area of triangle AOQ is 17cm², then find the area of triangle ABC.", options: ["51 cm²", "153 cm²", "136 cm²", "102 cm²"], answer: 3 },
+            { topic: "Percentages", question: "The sides of a regular hexagon are decreased by 19%. What is the percentage decrease in the surface area of the regular hexagon?", options: ["41.44%", "36%", "42.59%", "34.39%"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "In how many ways can a team of 16 members be selected from a group of 10 boys and 11 girls such that an equal number of boys and girls are selected?", options: ["6875", "8235", "6565", "7425"], answer: 3 },
+            { topic: "Time and Work", question: "A,B,C together take 60h; A,B,D take 72h; A,C,D take 84h; B,C,D take 48h. Who is the fastest worker?", options: ["Allen", "David", "Carl", "Ben"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "Jane invested $36,000 in a savings bank account that earns 10% interest compounded annually. What's the total amount at the end of 2 years?", options: ["$28490", "$34069", "$43560", "$42650"], answer: 2 },
+            { topic: "Geometry", question: "A 2m wide road is constructed inside a rectangular park of 32m length and 17m width. Find the area of the road.", options: ["120 m²", "200 m²", "180 m²", "100 m²"], answer: 3 },
+            { topic: "Data Interpretation", question: "From the adults pie chart, what is the number of males who are unemployed as a percentage of total unemployed persons in the city? Total adults: 98000, Male:Female ratio 25:24.", options: ["0.505", "0.385", "0.565", "0.4"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Two women Serena and Venus started walking from point A in the same direction. Serena: 3 steps/sec, 90cm/step. Venus: 4 steps/sec, 70cm/step. What is the distance between them in 9 minutes?", options: ["52m", "54m", "58m", "60m"], answer: 1 },
+            { topic: "Permutations and Combinations", question: "11 players are chosen from a group of 15 players to play cricket. If 5 particular players are always selected, how many distinct teams can be formed?", options: ["231", "455", "252", "210"], answer: 3 },
+            { topic: "Probability", question: "The probability that George will not pass the SAT exam is 3/8 and the probability that James will not pass is 7/15. What is the probability that both will pass?", options: ["2/5", "1/3", "5/8", "8/15"], answer: 0 },
+            { topic: "Geometry", question: "In an equilateral triangle XYZ, J, K and L are the midpoints of XY, XZ, and YZ respectively. The area of triangle JKL is 12.13 cm². What is the area of equilateral triangle XYZ?", options: ["24.26 cm²", "48 cm²", "48.52 cm²", "3.03 cm²"], answer: 2 },
+            { topic: "Permutations and Combinations", question: "A woman has 5 different tops, 8 different jeans, 4 different pairs of stilettos and 7 different handbags. In how many ways can she select one of each?", options: ["24", "5!*8!*4!*7!", "24!", "1120"], answer: 3 },
+            { topic: "Profit and Loss", question: "Timmy loses 20% by selling a novel for $124. Find the price at which she purchased the novel.", options: ["$155", "$100", "$120", "$140"], answer: 0 },
+            { topic: "Ages", question: "Smith got married 18 years ago. Now, his age is 150% of his age when he got married. If his son's present age is 1/9th of his present age, find his son's present age.", options: ["5 years", "6 years", "4 years", "8 years"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "A person reaches his office on time by driving at 24 km/hr. If he drives at 30 km/hr then he reaches office 15 minutes early. What is the usual time taken by the person to reach his office?", options: ["45 minutes", "75 minutes", "60 minutes", "90 minutes"], answer: 1 },
+            { topic: "Miscellaneous", question: "Amanda travelled 2000 km by air which was 5/11th of the entire journey. She travelled 3/11 of the entire distance by car. What is the distance she travelled by train?", options: ["1500 km", "1200 km", "1800 km", "1600 km"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "A cyclist (14 km/h) and a runner (10 km/h) start from the same point. After 2 hours, the distance between them is 8 km. If the runner increases their speed by 2 km/h, how long will it take for the cyclist to be 24 km ahead of the runner?", options: ["8 hours", "6 hours", "9 hours", "12 hours"], answer: 3 },
+            { topic: "Simple and Compound Interest", question: "Jacob invests $120,000 in a savings bank account at the rate of x% compounded quarterly in January 2020. If the total amount received by Jacob in March 2021 is $139,112, then find x.", options: ["16%", "8%", "20%", "12%"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "If a person walks at 20 km/hr instead of 14 km/hr, he would have walked 30 km more. What is the actual distance travelled by him?", options: ["70 km", "80 km", "60 km", "65 km"], answer: 0 },
+            { topic: "Geometry", question: "A 3m wide road is constructed inside a rectangular park. If the total cost for construction of the road is $3600 at a price of $25/m², then find the perimeter of park MNOP.", options: ["90 m", "72 m", "60 m", "30 m"], answer: 1 },
+            { topic: "Permutations and Combinations", question: "In how many ways can 11 balls be selected from 12 blue, 8 red and 10 green balls if same colour balls are identical? Given that at least two balls are selected from all colours.", options: ["30", "27", "24", "21"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "How many 4-digit distinct numbers can be formed using digits from 0, 3, 4, 5, 6, 7, 8 and 9 which are divisible by 5?", options: ["896", "672", "840", "180"], answer: 3 },
+            { topic: "Profit and Loss", question: "Anand bought two mobiles at the same price. He sold one of them at 20% profit and the other at 10% loss. Find the overall profit percentage made by Anand.", options: ["7.5%", "15%", "5%", "10%"], answer: 2 },
+            { topic: "Miscellaneous", question: "Amanda travelled 3000 km by air which was 5/7th of the entire journey. She travelled 1/5th of the entire distance by car. What is the distance she travelled by train?", options: ["100 km", "200 km", "250 km", "360 km"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "A man drives a car for 3 minutes and covers a distance of 3.05 km. If for each minute, the distance covered is 25% more than the distance covered in the previous minute, then find the distance covered in the first minute.", options: ["800 m", "720 m", "900 m", "750 m"], answer: 0 },
+            { topic: "Profit and Loss", question: "Garcia sold his bike at 14% profit. Had he charged $120 more, his profit would have been 17%. What is the cost price of the bike?", options: ["$4000", "$3600", "$4500", "$5000"], answer: 0 },
+            { topic: "Miscellaneous", question: "The passing mark for an exam is 50. Each student receives bonus marks based on their original marks (50-70: 10% bonus, 71-85: 5% bonus, Above 85: 3 marks). If the class had to maintain an average of 80 marks to win a prize, how many more marks should each student contribute equally?", options: ["Data insufficient", "2 marks", "3 marks", "5 marks"], answer: 0 },
+            { topic: "Permutations and Combinations", question: "How many 6 digit numbers can be formed using 5,7,9,0,1,8 when repetition of digits is allowed?", options: ["600", "720", "19440", "38880"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "In a factory, the ratio of Millets, Sugar and Wheat is 8:5:3 respectively. If the total number of goons in the factory is 4096. Then what is the number of goons of Millets in the factory?", options: ["2048", "1280", "2816", "768"], answer: 0 },
+            { topic: "Percentages", question: "The sides of a regular hexagon are decreased by 19%. What is the percentage decrease in the surface area of the regular hexagon?", options: ["41.44%", "36%", "42.59%", "34.39%"], answer: 3 },
+            { topic: "Miscellaneous", question: "'m' mangoes are distributed among some boys and girls. If each boy gets 9, then each girl gets 6. If each boy gets 10 and each girl gets 7, there is a surplus of 18. If the number of girls is 9, then find m.", options: ["136", "135", "140", "125"], answer: 1 },
+            { topic: "Miscellaneous", question: "In a certain month, the total income of Adam, Bruce and Charles is $24,000. Adam spends 75%, Bruce 60%, and Charles 72%. Sum of expenditures is $16,800. If the ratio of savings is 5:6:7, find Bruce's savings.", options: ["$2000", "$2800", "$2500", "$2400"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "Six students (A, B, C, D, E, F) need to line up. A and B refuse to stand next to each other, while C and D insist on standing together. In how many unique ways can they be arranged?", options: ["120", "180", "144", "160"], answer: 2 },
+            { topic: "Ages", question: "Isabela gave birth to twins when she was 23 years old. After m years, the sum of the ages of Isabella and her twin children was 56 years. What is the value of m?", options: ["10", "9", "12", "11"], answer: 3 },
+            { topic: "Simple and Compound Interest", question: "If $400 is invested at a simple interest rate of 4% per annum for 4 years, what will be the total interest earned?", options: ["64", "58", "22", "44"], answer: 0 },
+            { topic: "Probability", question: "The probability that Mardenborough will come first is 1/5 and the probability that Captain will not come first is 3/4. What is the probability that only one of them will come first?", options: ["2/5", "7/20", "1/5", "3/20"], answer: 1 },
+            { topic: "Percentages", question: "A Company had total revenue of $200,000 last year. This year, revenue increased by 15% but COGS (initially 40% of last year's revenue) increased by 25%. Calculate the net profit percentage for this year.", options: ["12.5%", "15.66%", "56.52%", "56.52%"], answer: 2 },
+            { topic: "Permutations and Combinations", question: "How many different 10-letter words can be formed from 'FEDERALISM' such that vowels and consonants change their position among themselves only?", options: ["24*6!", "2*7!", "21*6!", "12*6!"], answer: 0 },
+            { topic: "Miscellaneous", question: "In an election among Bill, Cullen and Mark, Bill gets half the votes of Cullen. Mark beats Cullen by 300,000 votes. Mark beats Bill by 10% of the total votes. Find the total number of votes polled.", options: ["350000", "600000", "400000", "320000"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "In m minutes from now, the time will be noon. 24 minutes ago, the time was 7m minutes past 10 a.m. Find the present time.", options: ["11:50 a.m.", "11:48 a.m.", "11:49 a.m.", "11:47 a.m."], answer: 1 },
+            { topic: "Time and Work", question: "Lin can complete a task in x days, Josh in 18 days, Chris in 24 days. Lin started. After 3 days, Josh and Chris joined. If the task is completed in 4 more days, find x.", options: ["212/35 days", "120/7 days", "126/11 days", "105/8 days"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "A train travelling at 36 km/hr crosses a woman on the platform in 15 seconds and crosses the platform in 36 seconds. If X m is the length of the train and Y m is the length of the platform, what is (X, Y)?", options: ["(120, 150)", "(150, 210)", "(120, 180)", "(150, 190)"], answer: 1 },
+            { topic: "Percentages", question: "In an IIT class, 70% of students are boys and 15% of students are in the dramatic club. If 13% of the boys are in the club, what percentage of the club members are girls?", options: ["45.5%", "41.2%", "38.5%", "39.33%"], answer: 3 },
+            { topic: "Miscellaneous", question: "In an examination, Ted scores 4 marks for a correct answer and loses 1/4 mark for a wrong answer. He attempts 75% of 60 questions and secures 165 marks. How many questions did he attempt correctly?", options: ["45", "42", "38", "40"], answer: 3 },
+            { topic: "Miscellaneous", question: "Amanda travelled 2000 km by air (5/11 of journey). She travelled 3/11 of the journey by car. What distance did she travel by train?", options: ["1000 km", "1200 km", "1250 km", "1500 km"], answer: 1 },
+            { topic: "Profit and Loss", question: "18.5% more is gained by selling a mattress for Rs. 25700 than by selling it at Rs. 20350. What is the cost price of the mattress?", options: ["Rs. 28918", "Rs. 28000", "Rs. 31720", "Rs. 29564"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "A and B are two numbers such that the ratio of twice A and thrice B is 8:7. If the sum of A and B is 608, find the value of A.", options: ["384", "368", "384", "442"], answer: 0 },
+            { topic: "Percentages", question: "A trust is selling tickets for a charity show at Rs. 150 each. A man sold 85% of his tickets and had 9 tickets remaining. How much money did he collect?", options: ["Rs. 7500", "Rs. 7650", "Rs. 9000", "Rs. 6000"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "The difference between Simple Interest received from two banks on Rs. 1250 for four years is Rs. 125. What is the difference between their annual rates?", options: ["3.5%", "4%", "2.5%", "3%"], answer: 2 },
+            { topic: "Time and Work", question: "Machine X produces 500 units in 10 hours, Machine Y produces 300 units in 8 hours. If they work together for 4 hours, how many additional hours will Y alone need to produce 500 units?", options: ["4 hours", "6 hours", "8 hours", "5 hours"], answer: 0 },
+            { topic: "Miscellaneous", question: "What is the minimum value of the expression 11a² + 13a + 6?", options: ["11/26", "191/44", "9/22", "13/22"], answer: 1 },
+            { topic: "Time and Work", question: "Smith and Shane can complete a project in 25 and 40 days respectively. If they work on alternate days beginning with Smith, in how many days will the work be completed?", options: ["31 days", "32 days", "15 days", "16 days"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "You have a box with a total of 48 blue and red rubber bands. If the ratio of red to blue is 3:5, how many red and blue rubber bands are in the box?", options: ["24, 42", "33, 66", "20, 40", "18, 30"], answer: 3 },
+            { topic: "Time and Work", question: "A can do a piece of work in 6 hours; B and C together in 5 hours, while A and C together in 4 hours. How long would B alone take to do it?", options: ["8 4/7 Hours", "6 2/7 Hours", "9 1/2 Hours", "7 1/7 Hours"], answer: 0 },
+            { topic: "Profit and Loss", question: "A designer chair sells for $120. The cost to produce it is $z. The store made a profit of z% of the production cost. Calculate z.", options: ["22.44%", "70.42%", "32.63%", "60.55%"], answer: 3 },
+            { topic: "Profit and Loss", question: "After two successive discounts of 30% and 15%, Chandler purchases a video game for Rs. 21420. What was the marked price?", options: ["33200", "30600", "35000", "36000"], answer: 3 },
+            { topic: "Profit and Loss", question: "A manufacturer sold jeans to a company for Rs. 600. The company sold them to a dealer for Rs. 750. The dealer sold them to a shopkeeper for Rs. 800. The shopkeeper marked them up by 30% and gave a 10% discount. What is the shopkeeper's profit percentage?", options: ["15%", "20%", "17%", "18%"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "Rocky travelled a certain distance in 12 hours. He travelled part on foot at 8 km/hr and the rest by bicycle at 16 km/hr. The distance by bicycle was 48 km more than on foot. How long did he travel on foot?", options: ["4 hours", "6 hours", "4.5 hours", "5 hours"], answer: 1 },
+            { topic: "Miscellaneous", question: "Mrs. Halpert has $240 in one-dollar, five-dollar, and ten-dollar notes. The number of notes of each denomination is equal. What is the total number of notes she has?", options: ["45", "32", "35", "45"], answer: 0 },
+            { topic: "Percentages", question: "A musician owns a flute with 16 holes. They add 25% more holes. Then, they decide to have a flute with 10% fewer holes than the new total. What is the final number of holes?", options: ["21", "18", "20", "19"], answer: 1 },
+            { topic: "Ratio and Proportion", question: "Aruna started a business with Rs. 35000. After 2 months, Kiran joined with Rs. 40000. After 6 more months, Vikram joined with Rs. 28000. At year end, profit is Rs. 13980. What is Vikram's share?", options: ["Rs. 1420", "Rs. 1540", "Rs. 1580", "Rs. 1680"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "Andy, Bruce, and Charles share tour expenses. Andy's share is 4/5 of Bruce's. Charles's share is 40% more than Bruce's. Andy pays $800, Bruce $600, Charles $1000. How much does Bruce need to pay Andy in the final settlement?", options: ["$100", "$50", "$75", "$150"], answer: 0 },
+            { topic: "Profit and Loss", question: "Mike bought a smartphone (MRP $2290) at a 5% discount and sold it to Jim for a 16.6% profit. Jim used it and sold it at a 12.5% loss. At what price did Jim sell it?", options: ["$1803", "$1655", "$2220", "$2233"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "Three investors, John, Shane, and David, invest in the ratio 4:5:6. After one year, John's investment grows by 20%, Shane's by 15%, and David's remains the same. If the total profit is $150000, how much does each receive?", options: ["$41000, $52500, $57500", "$40679, $52557, $57589", "$48000, $57500, $60000", "$47204, $54288, $58508"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "The ratio of some numbers is (3/9):(15/21):(18/30). The difference between the highest and lowest number is 80. Find the numbers.", options: ["70, 126, 150", "80, 160, 210", "150, 126, 75", "140, 126, 135"], answer: 0 },
+            { topic: "Ages", question: "Shruthi got married 18 years ago. Now, her age is 175% of her age when she got married. If her daughter's present age is 1/6th of her present age, find her daughter's present age.", options: ["10 years", "8 years", "12 years", "7 years"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "If the ratio of the subtraction and addition of two numbers is 14:15, what is the ratio of those two numbers?", options: ["1:29", "25:2", "27:1", "29:1"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "P, Q and R are partners. P received 1/5th of the profit, Q received 3/8th, and R received the remaining Rs. 5100. How much did Q receive?", options: ["Rs. 4800", "Rs. 3900", "Rs. 4200", "Rs. 4500"], answer: 3 },
+            { topic: "Permutations and Combinations", question: "In a party, a total of 595 handshakes take place. If each person shakes hands with every other person, how many persons are there in the party?", options: ["35", "34", "42", "38"], answer: 0 },
+            { topic: "Percentages", question: "The price of a play station becomes $480 after it decreases by 20%. Find the original price of the item.", options: ["$625", "$550", "$600", "$500"], answer: 2 },
+            { topic: "Profit and Loss", question: "Aaron bought an earphone for $650 and sold it at a 17% profit. He purchased another brand's earphones at the same price and sold them at a 15% loss. What is his overall profit/loss?", options: ["$6.5, Loss", "$13.5, Profit", "$13, Profit", "$13, Loss"], answer: 2 },
+            { topic: "Percentages", question: "A factory produces 1000 units/day. A new process reduced the defect rate from 8% to 5%. If the factory operates for 30 days, calculate the percentage decrease in defective units.", options: ["37.5%", "52.2%", "57.5%", "66.5%"], answer: 0 },
+            { topic: "Miscellaneous", question: "Find the value of x for the given equation: |3x - 8| = 12", options: ["8/3", "20/3", "20/3 and -4/3", "-4/3"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "The scores of Mimi and Lucy in a class test are in the ratio 11:13. If their total score is 480, find Lucy's score.", options: ["195", "165", "260", "220"], answer: 2 },
+            { topic: "Simple and Compound Interest", question: "Maggie lends a total of Rs. 30000 to Jack and Daisy. She lends a certain amount to Jack at 12% interest and the rest to Daisy at 8%. If the interest Jack and Daisy pay after four years is equal, what amount was lent to Jack?", options: ["Rs. 18000", "Rs. 15750", "Rs. 12000", "Rs. 20500"], answer: 2 },
+            { topic: "Time and Work", question: "A man, a woman and a girl can do a work in 24, 48 and 144 days respectively. How many girls must assist 3 men and 4 women to do the work in 3 days?", options: ["18", "8", "22", "6"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "A person in train P observes that train Q (thrice the speed of P) overtakes him in 20 seconds. If they travel in opposite directions, how long would it take for train Q to cross him?", options: ["25 seconds", "30 seconds", "26.67 seconds", "10 seconds"], answer: 3 },
+            { topic: "Probability", question: "An integer n is chosen at random from two-digit positive integers. What is the probability that (n-2)(n+2) is divisible by 8?", options: ["19/30", "23/90", "17/30", "43/90"], answer: 3 },
+            { topic: "Geometry", question: "A woman walks along the boundary of a rectangular society at 9.6 km/hr and completes one round in 11 mins. If the length and breadth are in the ratio 4:5, what is the area of the society (in sq. meters)?", options: ["192080", "176745", "200000", "193600"], answer: 3 },
+            { topic: "Miscellaneous", question: "If √(x+11) = -5, find the real value of x.", options: ["14", "Real value of x not possible", "6", "-14"], answer: 1 },
+            { topic: "Profit and Loss", question: "Adam sold his bike at a loss of $5500. If he sold it for $7500, he would have made a profit of $2000. Find the purchase price.", options: ["$13000", "$16,500", "$17500", "$13,000"], answer: 3 },
+            { topic: "Profit and Loss", question: "A company purchased 100 gadgets at $25 each. They sell each for $35. After selling 70, they reduce the price of the remaining by 20%. What is the total profit or loss?", options: ["$500 profit", "$790 profit", "$800 profit", "$290 profit"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "A sum of Rs. 5300 is divided into two parts. One part is invested at 10% p.a. for 2 years and the other at 20% for the same time. If the interest is compounded annually and both parts amount to the same value, find the smaller part.", options: ["Rs. 2300", "Rs. 2420", "Rs. 2200", "Rs. 2880"], answer: 3 },
+            { topic: "Time and Work", question: "Pavan can do a piece of work in 6 days. Working together, Pavan and Kalyan can do the work in 4 days. If Pavan is x times as efficient as Kalyan, what is the value of x?", options: ["Five", "Three", "Four", "Two"], answer: 3 },
+            { topic: "Probability", question: "Two numbers are selected from 1, 2, 3, 4, 5, 6, 7, 8 and 9 at random. What is the probability that their sum is odd?", options: ["None of the mentioned options", "4/9", "5/9", "2/9"], answer: 2 },
+            { topic: "Time and Work", question: "Bruce takes twice as much time as Jacob and thrice as much time as Sam. If all three together can complete the work in 12 days, how much time would Bruce take individually?", options: ["36 days", "48 days", "72 days", "24 days"], answer: 2 },
+            { topic: "Simple and Compound Interest", question: "Somesh borrowed Rs. 36000 from a bank at a 10% p.a. rate of interest compounded annually. Find the amount to pay to the bank after 3 years.", options: ["Rs. 50,578", "Rs. 45,254", "Rs. 47,916", "Rs. 41,952"], answer: 2 },
+            { topic: "Percentages", question: "Varun spends 16% of his salary on rent. From the remaining, he spends 25% on food and then 30% of the remaining on shopping. If he spends $320 on rent, find the remaining amount after shopping.", options: ["$882", "$972", "$820", "$1028"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "If m:n = 9:7 and m = p+q and n = p-q, then find (p:q).", options: ["8:1", "5:1", "7:1", "9:1"], answer: 0 },
+            { topic: "Percentages", question: "A T-shirt factory had defective rates of 4%, 5%, 10%, 20%, and 12.5% on production of 300, 500, 230, 30, and 480 pieces from Monday to Friday. What is the overall percentage of defective T-shirts?", options: ["6.4%", "10%", "7.4%", "8.18%"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "A company's budget is allocated in the ratio 3:5:7. After revision, the ratio changed to 2:4:7. If the total budget after revision is $210000 and the increase for the second department is $10000, what was the total budget before revision?", options: ["$180000", "$170000", "$178966", "$163846"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "Gloria rows a boat upstream for 20 km and downstream for 40 km. If she takes 8 hours each time, find the speed of the stream.", options: ["2.14 km/hr", "0.84 km/hr", "1.25 km/hr", "3.2 km/hr"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "The ratio of employees in two verticals of a bank is 13:14. If 4 employees are added to each, the ratio becomes 15:16. Find the initial number of employees in each vertical.", options: ["42, 45", "26, 28", "25, 29", "39, 42"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "Alex borrowed a certain amount. The sum amounts to USD 12000 after 2 years and USD 15000 after 3 years (compounded annually). What is the total interest paid by Alex in 3 years?", options: ["USD 7680", "USD 7250", "USD 7000", "USD 7320"], answer: 3 },
+            { topic: "Simple and Compound Interest", question: "Amanda lends Rs. 5000 to her friend Sarath at compound interest. After three years, she gets back Rs. 10985. What is the rate at which she lent the money?", options: ["30%", "25%", "28%", "19%"], answer: 0 },
+            { topic: "Miscellaneous", question: "If one-sixth of a number is subtracted from one-fifth of the same number, the result is 7. What is the number?", options: ["105", "350", "210", "280"], answer: 2 },
+            { topic: "Probability", question: "If two fair dice are rolled simultaneously, what is the probability that the sum of the numbers on their upper faces is 7?", options: ["1/4", "5/6", "1/6", "3/12"], answer: 2 },
+            { topic: "Permutations and Combinations", question: "In how many ways can a team of 11 Basketball players be selected from 6 defenders and 8 attackers such that the team has at least 5 attackers?", options: ["324", "320", "360", "364"], answer: 3 },
+            { topic: "Profit and Loss", question: "A company sells a refrigerator on a 20% profit margin. If the selling price is $240, what was the cost price?", options: ["$240", "$200", "$180", "$100"], answer: 1 },
+            { topic: "Ages", question: "R, G and B are brothers. R and G are twins. At present, the average age of R and G is 3/4 of B's present age. Five years ago, the ratio of G's age to B's age was 3:5. What will be R's age five years from now?", options: ["15 years", "10 years", "20 years", "25 years"], answer: 0 },
+            { topic: "Percentages", question: "Sunil earns $5000 per month and spends 40% on rent and food. Out of the remaining amount, he invests 50% in the share market. What amount is he left with at the end of every month?", options: ["$1800", "$1500", "$1650", "$3000"], answer: 1 },
+            { topic: "Simple and Compound Interest", question: "Jacob invests $945,000 in a savings account at x% compounded quarterly in Jan 2020. If the amount in March 2021 is $1,043,356, find x.", options: ["12%", "8%", "20%", "16%"], answer: 1 },
+            { topic: "Miscellaneous", question: "If the remainder obtained on dividing a number 12P (P>0) by 7 is 6, which of the following is a value of P?", options: ["3", "4", "7", "5"], answer: 3 },
+            { topic: "Probability", question: "A factory machine has a 15% chance of producing a defective part. What is the probability that the first defective part is produced on either the 3rd or 4th attempt?", options: ["0.3003", "0.1001", "0.2104", "0.2004"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "If Jake travelled at 3/5th of his usual speed, he would reach his destination 20 minutes late. By how many minutes earlier would he arrive if he travelled at 5/3 of his usual speed?", options: ["12", "18", "16", "20"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "John walks to his school. He covers the first quarter of the distance at 3 kmph, the second quarter at 6 kmph, the third quarter at 4 kmph and the rest at 7 kmph. What is his average speed (in kmph)?", options: ["4.48", "Cannot be determined", "6.3", "5.52"], answer: 0 },
+            { topic: "Data Interpretation", question: "How many residents in locality C read The Bharat Express or The Dawn?", options: ["750", "2250", "1500", "2350"], answer: 1 },
+            { topic: "Profit and Loss", question: "I purchased 2 racing motorcycles at the same price. One was sold at a 10% loss and the other at a 15% loss. Find the overall loss percentage I incurred.", options: ["36%", "25%", "17.5%", "12.5%"], answer: 3 },
+            { topic: "Miscellaneous", question: "If f(m) = m³ - 4m + 8, then find the remainder when f(m) is divided by m-2.", options: ["6", "12", "16", "8"], answer: 3 },
+            { topic: "Time and Work", question: "There are two pipes A and B connected to a 500-liter tank. A fills at 'x' liters/hour, while B drains at 8 liters/hour. If it takes 80 hours to fill the tank with both pipes open, find x.", options: ["18.25", "16.67", "12.33", "14.25"], answer: 3 },
+            { topic: "Probability", question: "Marcus has an unbiased coin and tosses it 9 times. What is the probability that he would get more heads than tails?", options: ["1/4", "193/512", "197/203", "1/2"], answer: 3 },
+            { topic: "Percentages", question: "Anil earns $4500 per month and spends 40% on rent and food. Out of the remaining amount, he invests 50% in the share market. What amount is he left with at the end of every month?", options: ["$1800", "$1650", "$1500", "$1350"], answer: 3 },
+            { topic: "Time, Speed and Distance", question: "The speed of a boat in still water is three times the speed of the stream. The boat takes a total of 4.5 hours to go 18 km downstream and return. What is the time taken for the upstream trip?", options: ["3 hours", "1 hour", "2 hours", "1.5 hours"], answer: 0 },
+            { topic: "Time, Speed and Distance", question: "Henry travelled from Mumbai to Delhi and returned at constant speeds. His average speed for the entire trip was the arithmetic mean of his onward and return speeds. He travelled 2400 km in 16 hours. Find his onward speed (in kmph).", options: ["100", "160", "120", "150"], answer: 3 },
+            { topic: "Time and Work", question: "A is a workman twice as good as B and therefore can finish a job in 50 days less than B. How many days will they both need to complete the work together?", options: ["32 2/5 days", "33 2/3 days", "33 1/3 days", "34 days"], answer: 2 },
+            { topic: "Percentages", question: "Two candidates contested in an election. The candidate who got 48% of votes lost by 288 votes. What is the total number of votes polled by the winner if no votes were invalid?", options: ["3852", "3744", "3564", "3640"], answer: 1 },
+            { topic: "Time, Speed and Distance", question: "Arthur and Leo started cycling around a circular track. Arthur completed 7 rounds in 12/5 hours at 25/7 km/hr. Leo completed 9 rounds in 22/7 hours. What is the speed of Leo?", options: ["3.5 km/hr", "3 km/hr", "4.2 km/hr", "4 km/hr"], answer: 3 },
+            { topic: "Probability", question: "A store sells 200 electronic devices: 120 laptops, 50 tablets, and the rest smartphones. If a device is randomly selected, what is the probability that it is not a tablet?", options: ["3/4", "2/3", "3/2", "4/3"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "At a shopping complex, the ratio of security guards to salespersons is 2:12. When 15 more salespersons are hired, the ratio changes to 2:15. What is the difference between the number of salespersons and security guards?", options: ["3", "50", "6", "40"], answer: 1 },
+            { topic: "Probability", question: "There are two different color bikes in a showroom - black and yellow. A man buys two bikes one at a time. The probability that both bikes are of different colors is 16/33. If the number of yellow bikes is eight and the total number of bikes is less than twenty, find the number of black bikes.", options: ["6", "4", "10", "12"], answer: 2 },
+            { topic: "Miscellaneous", question: "Find the difference of the roots of the equation m² - 7m + 12 = 0.", options: ["1", "2", "4", "-1"], answer: 0 },
+            { topic: "Probability", question: "A box contains 7 white and 10 ivory colored game coins. What is the probability of drawing 2 ivory colored coins in succession without replacement?", options: ["9/16", "126/141", "45/136", "10/17"], answer: 2 },
+            { topic: "Simple and Compound Interest", question: "Ally borrowed Rs. 34,000 from a bank at a 20% p.a. rate of interest, compounded annually. Find the amount she has to pay after 4 years.", options: ["Rs. 47,916", "Rs. 45,254", "Rs. 70,502.4", "Rs. 79,511"], answer: 2 },
+            { topic: "Time, Speed and Distance", question: "Two trains running in the same direction at 56 km/hr and 80 km/hr completely pass one another in 75 seconds. If the length of the first train is 225 m, what is the length of the second train?", options: ["275 m", "210 m", "300 m", "250 m"], answer: 0 },
+            { topic: "Profit and Loss", question: "A shop sold a wooden bed for $26500 after a 9% discount and incurred a 9% loss. At what price should the owner sell the bed to earn a 9% profit?", options: ["$31790", "$29120", "$31540", "$31740"], answer: 0 },
+            { topic: "Probability", question: "A bag contains 4 orange and 7 purple chocolates. A second bag contains 8 orange and 5 purple chocolates. A chocolate is drawn from each bag. What is the probability that both are purple?", options: ["35/143", "2/11", "5/13", "7/11"], answer: 0 },
+            { topic: "Profit and Loss", question: "Amaira had an amount equal to the list price of a crockery plate. She bought the plate at a 33% discount, which allowed her to buy a set of spoons for Rs. 300 and pay Rs. 35 for transport. What was the initial amount?", options: ["Rs. 1100", "Rs. 1015.15", "Rs. 900", "Rs. 1000"], answer: 1 },
+            { topic: "Percentages", question: "In a company, 25% of women are over 29, and 80% are <= 60. 40% of all women play volleyball. If 20% of women over 60 play volleyball, what percentage of volleyball players are <= 60?", options: ["0.79", "0.82", "0.74", "0.9"], answer: 3 },
+            { topic: "Time and Work", question: "Lin can complete a task in 12 days, John in X days, Chris in 24 days. Lin started. After 3 days, John and Chris joined. If the task is completed in 4 more days, find X.", options: ["16", "18", "15", "14"], answer: 1 },
+            { topic: "Profit and Loss", question: "A shopkeeper marks up an item by 50%. He then offers two successive discounts of 20% and 25%. If the final selling price is $160, what is the cost price?", options: ["$260", "$240", "$200", "$177.77"], answer: 3 },
+            { topic: "Percentages", question: "Gia scores 30% on a test. After review, her score increases by 20%, but she still fails by 8 marks. If her post-review score increased by 25%, she would have 10 more than the passing score. What is the passing percentage?", options: ["38.67%", "39.20%", "40%", "36.75%"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "After putting 48 pink balls and 32 blue balls in a box, the ratio becomes 3:2. If the initial number of blue balls was 18, how many pink balls needed to be added initially to make the ratio 2:1?", options: ["9", "16", "12", "18"], answer: 3 },
+            { topic: "Ratio and Proportion", question: "The income of A, B, and C are in the ratio 3:4:5 and their expenditures are in the ratio 2:3:4. If A saves $600, B saves $800, and C saves $1000, what is the total income of A, B, and C?", options: ["$3200", "$2400", "$7200", "$6000"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "In a 40-liter syrup solution, the ratio of syrup to liquid X is 3:2. To change the ratio to 1:3, how much liquid X needs to be added?", options: ["72 liters", "66 liters", "21 liters", "56 liters"], answer: 3 },
+            { topic: "Time and Work", question: "Caleb can work 2/5 times as fast as Charles and Cameron together. Caleb and Cameron can work together two times as fast as Charles. If Caleb takes 20 days to complete a task alone, how long would Charles take?", options: ["120/7 days", "12 days", "105/8 days", "15 days"], answer: 0 },
+            { topic: "Simple and Compound Interest", question: "At what rate of compounded interest per annum will a sum of $3000 become $3600 in 2 years?", options: ["11%", "8%", "5%", "9.54%"], answer: 3 },
+            { topic: "Miscellaneous", question: "If the remainder obtained on dividing a number 12P (P>0) by 7 is 6, which of the following is a value of P?", options: ["3", "4", "7", "5"], answer: 3 },
+            { topic: "Simple and Compound Interest", question: "Vinay borrowed Rs. 32000 from a bank at a 10% p.a. rate of interest compounded annually. Find the amount he has to pay after 3 years.", options: ["Rs. 45,254", "Rs. 47,916", "Rs. 42,592", "Rs. 50,578"], answer: 2 },
+            { topic: "Ratio and Proportion", question: "P and Q appeared in an exam. The sum of P's score and thrice Q's score is 350. The difference of twice P's score and Q's score is 63. Find the ratio of scores of P and Q.", options: ["13:11", "13:12", "12:11", "11:13"], answer: 0 },
+            { topic: "Data Interpretation", question: "How many students doing mechanical engineering in college Q were from India?", options: ["75", "65", "72", "60"], answer: 1 },
+            { topic: "Data Interpretation", question: "If the temperature on Thursday (18°) was increased by 1/4th of the second highest temperature of the week (24°), what would be the new temperature on Thursday?", options: ["18°", "35°", "30°", "24°"], answer: 3 },
+            { topic: "Miscellaneous", question: "Find the missing term in the sequence: 13, 40, ?, 411, 1297, 4016", options: ["128", "140", "119", "123"], answer: 3 },
+            { topic: "Data Interpretation", question: "If the monthly expenditure on entertainment for all five persons is the same, for how many persons was this expenditure between 8% and 11% of their total monthly expenditure?", options: ["4", "2", "1", "3"], answer: 3 },
+            { topic: "Data Interpretation", question: "In which year did any company record the highest percentage increase in its income over the previous year?", options: ["2015", "2014", "2016", "2013"], answer: 3 },
+            { topic: "Data Interpretation", question: "What is the percentage of total mobile phones sold online in June and July combined to March, April, and May combined in 2018?", options: ["71.20%", "Cannot be Determined", "66.67%", "74.67%"], answer: 3 },
+            { topic: "Percentages", question: "The price of a play station becomes $480 after it decreases by 20%. Find the original price.", options: ["$625", "$550", "$600", "$400"], answer: 2 },
+            { topic: "Geometry", question: "In the given figure, AB || CD, AD=BC, AE=7 cm and area(ADE):area(AEC) is 1:3. Which can be the area of trapezium ABCD if sides are integers?", options: ["92 cm²", "70 cm²", "135 cm²", "168 cm²"], answer: 3 },
+            { topic: "Time and Work", question: "A group of workers can complete a task in 15 days. After working for 5 days, 3 workers leave, and the remaining workers complete the task in 12 more days. How many workers were there initially?", options: ["10", "18", "9", "12"], answer: 2 },
+            { topic: "Data Interpretation", question: "If Andy spent $50 on food (20% of expenses), what are his total monthly expenses?", options: ["$2000", "$2750", "$3750", "$250"], answer: 3 },
+            { topic: "Data Interpretation", question: "Determine the difference of ratios between (Leisure and Commuting) & (Sleeping and Working).", options: ["5/6", "2/5", "4/9", "3/7"], answer: 0 },
+            { topic: "Geometry", question: "A square JKLM is circumscribed by a circle of radius 8cm. What is the area of the square?", options: ["128 cm²", "16√2 cm²", "64√2 cm²", "64 cm²"], answer: 0 },
+            { topic: "Ratio and Proportion", question: "8% of P's income = 24% of Q's income, and 16% of Q's income = 32% of R's income. If R's income is Rs. 36000, what is the total income of P, Q, and R?", options: ["Rs. 125000", "Rs. 324000", "Rs. 252000", "Rs. 100000"], answer: 1 },
+            { topic: "Data Interpretation", question: "Total expenditure is $500,000. If Miscellaneous expenditure (10%) was increased by 50%, calculate the revised total expenditure.", options: ["$725,000", "$625,000", "$545,000", "$525,000"], answer: 3 },
+            { topic: "Geometry", question: "In the given figure, line p and line r intersect. What are the respective values of x, y, and z (in degrees)?", options: ["130, 15, 130", "120, 50, 95", "130, 25, 120", "130, 130, 35"], answer: 2 },
+            { topic: "Data Interpretation", question: "The total rice produced from 2011 to 2016 is approximately what percentage of the total food grains production in 2013?", options: ["0.75", "2.09", "2.29", "228.8%"], answer: 3 },
+        ];
+
+
+        const appState = {
+            currentTopic: 'All',
+            score: 0,
+            totalAnswered: 0,
+            answeredQuestions: new Set(),
+        };
+
+        const topicNav = document.getElementById('topic-nav');
+        const questionsContainer = document.getElementById('questions-container');
+        const currentTopicTitle = document.getElementById('current-topic-title');
+        const scoreTracker = document.getElementById('score-tracker');
+        const introSection = document.getElementById('intro-section');
+        const sidebar = document.getElementById('sidebar');
+        const menuToggle = document.getElementById('menu-toggle');
+
+        function getTopics() {
+            const topics = new Set(questions.map(q => q.topic));
+            return ['All', ...Array.from(topics).sort()];
+        }
+
+        function renderTopics() {
+            const topics = getTopics();
+            topicNav.innerHTML = '';
+            const list = document.createElement('ul');
+            list.className = 'space-y-2';
+
+            topics.forEach(topic => {
+                const item = document.createElement('li');
+                const button = document.createElement('button');
+                button.textContent = topic;
+                button.className = 'w-full text-left px-4 py-2 rounded-md transition duration-200';
+                if (topic === appState.currentTopic) {
+                    button.classList.add('bg-slate-800', 'text-white', 'font-semibold');
+                } else {
+                    button.classList.add('text-slate-600', 'hover:bg-slate-100', 'hover:text-slate-900');
+                }
+                button.onclick = () => {
+                    appState.currentTopic = topic;
+                    renderApp();
+                    if(window.innerWidth < 768) {
+                        sidebar.classList.remove('open');
+                    }
+                };
+                item.appendChild(button);
+                list.appendChild(item);
+            });
+            topicNav.appendChild(list);
+        }
+
+        function renderQuestions() {
+            questionsContainer.innerHTML = '';
+            const filteredQuestions = appState.currentTopic === 'All'
+                ? questions
+                : questions.filter(q => q.topic === appState.currentTopic);
+
+            if (filteredQuestions.length === 0 && appState.currentTopic !== 'All') {
+                questionsContainer.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-md text-center"><p class="text-slate-500">No questions available for this topic yet.</p></div>`;
+            } else {
+                 filteredQuestions.forEach((q, index) => {
+                    const questionId = `${appState.currentTopic.replace(/\s+/g, '-')}-${index}`;
+                    const questionCard = document.createElement('div');
+                    questionCard.className = 'bg-white p-6 rounded-lg shadow-md';
+                    questionCard.setAttribute('data-question-id', questionId);
+
+                    const questionText = document.createElement('p');
+                    questionText.className = 'font-semibold text-lg mb-4 text-slate-900';
+                    questionText.innerHTML = `${index + 1}. ${q.question}`;
+
+                    const optionsGrid = document.createElement('div');
+                    optionsGrid.className = 'grid grid-cols-1 md:grid-cols-2 gap-3';
+
+                    q.options.forEach((option, optionIndex) => {
+                        const optionBtn = document.createElement('button');
+                        optionBtn.innerHTML = option;
+                        optionBtn.className = 'option-btn w-full text-left p-3 border border-slate-300 rounded-md hover:bg-slate-100 transition duration-200';
+                        optionBtn.setAttribute('data-option-index', optionIndex);
+                        optionBtn.onclick = () => handleAnswer(q, optionIndex, questionId);
+                        optionsGrid.appendChild(optionBtn);
+                    });
+                    
+                    const controlsContainer = document.createElement('div');
+                    controlsContainer.id = `controls-${questionId}`;
+                    controlsContainer.className = 'mt-4 flex space-x-2';
+                    
+                    const explanationContainer = document.createElement('div');
+                    explanationContainer.id = `explanation-${questionId}`;
+                    explanationContainer.className = 'explanation-container whitespace-pre-wrap';
+                    
+                    const generatedQuestionContainer = document.createElement('div');
+                    generatedQuestionContainer.id = `generated-q-${questionId}`;
+                    generatedQuestionContainer.className = 'mt-4';
+
+                    questionCard.appendChild(questionText);
+                    questionCard.appendChild(optionsGrid);
+                    questionCard.appendChild(controlsContainer);
+                    questionCard.appendChild(explanationContainer);
+                    questionCard.appendChild(generatedQuestionContainer);
+                    questionsContainer.appendChild(questionCard);
+                });
+            }
+        }
+        
+        function handleAnswer(question, selectedIndex, questionId) {
+            if (appState.answeredQuestions.has(questionId)) return;
+
+            appState.totalAnswered++;
+            appState.answeredQuestions.add(questionId);
+
+            const isCorrect = selectedIndex === question.answer;
+            if (isCorrect) {
+                appState.score++;
+            }
+
+            const questionCard = document.querySelector(`[data-question-id="${questionId}"]`);
+            const optionButtons = questionCard.querySelectorAll('.option-btn');
+
+            optionButtons.forEach((btn, index) => {
+                btn.disabled = true;
+                if (index === selectedIndex) {
+                    btn.classList.add(isCorrect ? 'correct' : 'incorrect');
+                }
+                if (index === question.answer && !isCorrect) {
+                     btn.classList.add('correct');
+                }
+            });
+            
+            const controlsContainer = document.getElementById(`controls-${questionId}`);
+            controlsContainer.innerHTML = ''; 
+            
+            const explainBtn = document.createElement('button');
+            explainBtn.innerHTML = '✨ Explain Answer';
+            explainBtn.className = 'px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-200';
+            explainBtn.onclick = () => getExplanation(question, questionId);
+            
+            const similarQBtn = document.createElement('button');
+            similarQBtn.innerHTML = '✨ Generate Similar Question';
+            similarQBtn.className = 'px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition duration-200';
+            similarQBtn.onclick = (e) => {
+                e.target.disabled = true;
+                e.target.textContent = 'Generating...';
+                getSimilarQuestion(question, questionId);
+            };
+
+            controlsContainer.appendChild(explainBtn);
+            controlsContainer.appendChild(similarQBtn);
+
+            updateScore();
+        }
+
+        async function getExplanation(question, questionId) {
+            const controlsContainer = document.getElementById(`controls-${questionId}`);
+            const explanationContainer = document.getElementById(`explanation-${questionId}`);
+            const explainBtn = controlsContainer.querySelector('button:first-child');
+            if (explainBtn) explainBtn.style.display = 'none';
+
+            explanationContainer.innerHTML = '<div class="loader mx-auto"></div>';
+            explanationContainer.style.display = 'block';
+
+            const optionsText = question.options.map((opt, i) => `${String.fromCharCode(65 + i)}) ${opt}`).join('\n');
+            const prompt = `Please provide a clear, step-by-step explanation for the following aptitude question. Explain the logic and calculations needed to arrive at the correct answer.
+
+Question: ${question.question}
+Options:
+${optionsText}
+
+Correct Answer: ${question.options[question.answer]}`;
+
+            const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                let explanationText = "Sorry, I couldn't generate an explanation for this question.";
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    explanationText = result.candidates[0].content.parts[0].text;
+                }
+                
+                explanationContainer.innerHTML = explanationText;
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                explanationContainer.innerHTML = `An error occurred while fetching the explanation: ${error.message}`;
+            }
+        }
+
+        async function getSimilarQuestion(originalQuestion, questionId) {
+            const generatedQuestionContainer = document.getElementById(`generated-q-${questionId}`);
+            generatedQuestionContainer.innerHTML = '<div class="loader mx-auto"></div>';
+
+            const prompt = `Based on the following aptitude question on the topic of "${originalQuestion.topic}", generate a new, similar multiple-choice question. The new question must test the same core concept but use different numbers, scenarios, or wording. Provide the response as a JSON object with the keys: "question", "options" (an array of 4 strings), and "answer" (the 0-based index of the correct option).
+
+Original Question: "${originalQuestion.question}"`;
+
+            const payload = {
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: {
+                  responseMimeType: "application/json",
+                  responseSchema: {
+                      type: "OBJECT",
+                      properties: {
+                          "question": { "type": "STRING" },
+                          "options": {
+                              "type": "ARRAY",
+                              "items": { "type": "STRING" }
+                          },
+                          "answer": { "type": "NUMBER" }
+                      },
+                      required: ["question", "options", "answer"]
+                  }
+              }
+            };
+
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+                const result = await response.json();
+                const jsonText = result.candidates[0].content.parts[0].text;
+                const newQ = JSON.parse(jsonText);
+
+                renderGeneratedQuestion(newQ, generatedQuestionContainer);
+
+            } catch (error) {
+                console.error("Error generating similar question:", error);
+                generatedQuestionContainer.innerHTML = `<p class="text-red-500 text-center">Failed to generate a similar question. Please try again.</p>`;
+            }
+        }
+        
+        function renderGeneratedQuestion(q, container) {
+            container.innerHTML = '';
+            const card = document.createElement('div');
+            card.className = 'bg-slate-50 p-4 rounded-lg border border-purple-200 mt-4';
+
+            const title = document.createElement('h4');
+            title.className = 'font-bold text-purple-700 mb-2';
+            title.textContent = '✨ Here is a similar question to practice:';
+            
+            const questionText = document.createElement('p');
+            questionText.className = 'font-semibold text-md mb-3 text-slate-800';
+            questionText.textContent = q.question;
+
+            const optionsGrid = document.createElement('div');
+            optionsGrid.className = 'grid grid-cols-1 md:grid-cols-2 gap-2';
+
+            q.options.forEach((option, optionIndex) => {
+                const btn = document.createElement('button');
+                btn.textContent = option;
+                btn.className = 'option-btn w-full text-left p-2 border border-slate-300 rounded-md hover:bg-slate-200 transition duration-200 text-sm';
+                btn.onclick = (e) => {
+                    const allBtns = optionsGrid.querySelectorAll('button');
+                    allBtns.forEach(b => b.disabled = true);
+                    if (optionIndex === q.answer) {
+                        e.target.classList.add('correct');
+                    } else {
+                        e.target.classList.add('incorrect');
+                        allBtns[q.answer].classList.add('correct');
+                    }
+                };
+                optionsGrid.appendChild(btn);
+            });
+
+            card.appendChild(title);
+            card.appendChild(questionText);
+            card.appendChild(optionsGrid);
+            container.appendChild(card);
+        }
+
+
+        function updateScore() {
+            scoreTracker.textContent = `Score: ${appState.score} / ${appState.totalAnswered}`;
+        }
+        
+        function resetState() {
+            appState.score = 0;
+            appState.totalAnswered = 0;
+            appState.answeredQuestions.clear();
+        }
+
+        function renderApp() {
+            resetState();
+            document.title = `${appState.currentTopic} - Aptitude Practice`;
+            currentTopicTitle.textContent = `${appState.currentTopic} Questions`;
+            introSection.style.display = 'none';
+            renderTopics();
+            renderQuestions();
+            updateScore();
+        }
+        
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            appState.currentTopic = 'All';
+            currentTopicTitle.textContent = "Welcome!";
+            introSection.style.display = 'block';
+            renderTopics();
+            questionsContainer.innerHTML = '';
+        });
+    </script>
+</body>
+</html>
